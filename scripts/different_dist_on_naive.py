@@ -3,7 +3,7 @@ import pandas as pd
 import sys
 
 if len(sys.argv) <= 2:
-    print('provide csv and output path!, need 2 args, you have provided', len(sys.argv) - 1)
+    print('different_dist_on_naive.py: provide csv and output path!, need 2 args, you have provided', len(sys.argv) - 1)
     quit()
 
 csvname = sys.argv[1]

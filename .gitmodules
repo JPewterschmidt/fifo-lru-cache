@@ -7,3 +7,6 @@
 [submodule "smhasher"]
 	path = smhasher
 	url = git@github.com:aappleby/smhasher.git
+[submodule "rustex"]
+	path = rustex
+	url = git@github.com:dragazo/rustex.git

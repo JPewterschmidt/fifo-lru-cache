@@ -27,6 +27,7 @@ target("nbtlru")
     add_includedirs(
         "include", 
         "smhasher/src",
+        "rustex",
         { public = true }
     )
 
@@ -71,9 +72,15 @@ target("benchmark")
                 "experiment-report/pics/different_dist_on_naive.png"
             }
         )
+        os.execv(
+            "python", { 
+                "scripts/multi_threads_on_naive.py", 
+                target:targetdir() .. "/multi_threads_on_naive.csv", 
+                "experiment-report/pics/multi_threads_on_naive.png"
+            }
+        )
         
         print("compiling report ... ")
-
         old_working_dir = os.workingdir()
         os.cd('experiment-report')
         os.execv("xelatex", { "main.tex" })

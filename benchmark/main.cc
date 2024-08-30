@@ -15,5 +15,6 @@ using namespace nbtlru;
 int main()
 {
     different_dist_on_naive();   
+    multi_threads_on_naive();
     return 0;   
 }
