@@ -1,0 +1,42 @@
+\maketitle
+
+\section{实验报告}
+
+\subsection{技术选型}
+
+本次实验主要实现 FrozenHot\cite{qiu_frozenhot_2023} 的动态缓存部分。
+采用 LRU 置换算法，本时延中的该置换算法基于链表和hash表作为数据结构。
+hash 函数选用 MurmurHash3 \cite{SMHasher}
+
+本次考核文献\cite{qiu_frozenhot_2023}采用一个不可变无锁前端缓存，显著减少了缓存在并发管理方面的开销。
+文中讨论了 lock contention 对系统性能的负面影响。出于相同的目的，本实验采用lock-free链表。
+并在\cite{timothy_l_harris_pragmatic_2001}方案的基础上，增加\verb|splice|操作，
+以满足置换算法的需要。
+
+\subsection{实现细节}
+
+
+\subsection{性能测试}
+
+\subsubsection{测试方法}
+
+本实验分别对
+\begin{enumerate}
+    \item 单线程缓存（基准）
+    \item 多线程条件下一把锁保护的基准缓存
+    \item 为多线程设计实现的缓存
+\end{enumerate}
+进行测试，按照实验要求测试数据量为$10^6$项，每项key为8B，value为16B 的数据。
+其中第二项和第三项将会测试其在不同线程数量时的性能对比。
+上述三种缓存实现均采用LRU作为淘汰算法，
+因此只在基准测试中采用多种随机生成分布，
+在对上述第2项和第3项测试时，仅采用 Zipf 分布\cite{dirtyzipf2024}。
+
+\subsubsection{测试环境}
+
+\begin{itemize}
+    \item Intel Core I7 8750H 2.20GHz - 4.10GHz
+    \item 16GB RAM
+    \item \verb|GCC 13.3.1 20240614|
+    \item \verb|Linux 6.6.47-gentoo-dist x86_64 GNU/Linux|
+\end{itemize}

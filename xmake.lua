@@ -54,7 +54,7 @@ target("benchmark")
         "benchmark/*.cc", 
         "smhasher/src/Murmur*.cpp"
     )
-    add_includedirs("dirtyzipf", "util")
+    add_includedirs("dirtyzipf")
     add_packages("csv2")
     set_policy("build.warning", true)
     add_deps("nbtlru")
@@ -62,4 +62,6 @@ target("benchmark")
         "gflags", 
         "concurrentqueue"
     )
-    
+    after_run(function (target)
+        os.execv("python scripts/different_dist_on_naive.py", target:targetdir())
+    end)

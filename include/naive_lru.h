@@ -3,6 +3,7 @@
 
 #include <list>
 #include <cstddef>
+#include <cassert>
 #include <utility>
 #include <optional>
 #include <functional>

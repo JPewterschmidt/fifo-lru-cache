@@ -1,0 +1,230 @@
+@article{qiaolin_yu_caas-lsm_2024,
+	title = {{CaaS}-{LSM}: Compaction-as-a-Service for {LSM}-based Key-Value Stores in Storage Disaggregated Infrastructure},
+	volume = {2},
+	doi = {10.1145/3654927},
+	abstract = {Optimizing {LSM}-based Key-Value Stores ({LSM}-{KVS}) for disaggregated storage is essential to achieve better resource utilization, performance, and flexibility. Most of the existing studies focus on offloading the compaction to the storage nodes to mitigate the performance penalties caused by heavy network traffic between computing and storage. However, several critical issues are not addressed including the strong dependency between offloaded compaction and {LSM}-{KVS}, resource load-balancing, compaction scheduling, and complex transient errors.To address the aforementioned issues and limitations, in this paper, we propose {CaaS}-{LSM}, a novel disaggregated {LSM}-{KVS} with a new idea of Compaction-as-a-Service. {CaaS}-{LSM} brings three key contributions. First, {CaaS}-{LSM} decouples the compaction from {LSM}-{KVS} and achieves stateless execution to ensure high flexibility and avoid coordination overhead with {LSM}-{KVS}. Second, {CaaS}-{LSM} introduces a performance- and resource-optimized control plane to guarantee better performance and resource utilization via an adaptive run-time scheduling and management strategy. Third, {CaaS}-{LSM} addresses different levels of transient and execution errors via sophisticated error-handling logic. We implement the prototype of {CaaS}-{LSM} based on {RocksDB} and evaluate it with different {LSM}-based distributed databases (Kvrocks and Nebula). In the storage disaggregated setup, {CaaS}-{LSM} achieves up to 8X throughput improvement and reduces the P99 latency up to 98{\textbackslash}\% compared with the conventional {LSM}-{KVS}, and up to 61{\textbackslash}\% of improvement compared with state-of-the-art {LSM}-{KVS} optimized for disaggregated storage.},
+	pages = {28},
+	number = {3},
+	journal = {ssociation for Computing Machinery},
+	author = {{Qiaolin Yu}},
+    year = {2024},
+	date = {2024-06},
+	langid = {english},
+	file = {Yu - CaaS-LSM Compaction-as-a-Service for LSM-based Ke.pdf:/home/wilson/Zotero/storage/JJC8SMTM/Yu - CaaS-LSM Compaction-as-a-Service for LSM-based Ke.pdf:application/pdf},
+}
+
+@article{cui_swapkv_2022,
+	title = {{SwapKV}: A Hotness Aware In-memory Key-Value Store for Hybrid Memory Systems},
+	rights = {https://ieeexplore.ieee.org/Xplorehelp/downloads/license-information/{IEEE}.html},
+	issn = {1041-4347, 1558-2191, 2326-3865},
+	url = {https://ieeexplore.ieee.org/document/9423547/},
+	doi = {10.1109/TKDE.2021.3077264},
+	shorttitle = {{SwapKV}},
+	abstract = {In-memory Key-Value ({KV}) stores are widely deployed in modern data centers. These systems generally use {DRAM} as their storage medium, causing huge hardware costs. The emerging persistent memory ({PMEM}) is a potential substitute for {DRAM}, which has a lower price and larger capacity, but lower access speed and bandwidth. Many prior studies strive to build hybrid memory systems to retain both the advantages of {DRAM} and {PMEM}. However, they are either application agnostic or simply take {DRAM} as a cache, which are both not efﬁcient for in-memory {KV} stores. In this paper, we propose {SwapKV}, a well-designed in-memory {KV} store for hybrid {DRAM}-{PMEM} system. {SwapKV} has several promising properties. First, {SwapKV} combines {DRAM} and {PMEM} to a uniform memory pool and only stores one copy of data, which maximizes capacity utilization. Second, {SwapKV} maps all writing operations to {DRAM} and migrates data to {PMEM} with large blocks asynchronously, which mitigates the intrinsic inefﬁciency of {PMEM} for writing operations. Third, {SwapKV} maintains the hot data in {DRAM} through an efﬁcient hotness ﬁltering and data swapping mechanism, which ensures high system throughput and responsiveness. We implement {SwapKV} and evaluate it under various workload patterns. The results demonstrate that {SwapKV} improves the throughput by 11\% ∼ 41\% compared to the state-of-the-art alternatives.},
+	pages = {1--1},
+	journaltitle = {{IEEE} Transactions on Knowledge and Data Engineering},
+	shortjournal = {{IEEE} Trans. Knowl. Data Eng.},
+	author = {Cui, Lixiao and He, Kewen and Li, Yusen and Li, Peng and Zhang, Jiachen and Wang, Gang and Liu, Xiao-Guang},
+	urldate = {2024-06-20},
+    year = {2022},
+	date = {2022},
+	langid = {english},
+	file = {Cui et al. - 2022 - SwapKV A Hotness Aware In-memory Key-Value Store .pdf:/home/wilson/Zotero/storage/UEDG7WBU/Cui et al. - 2022 - SwapKV A Hotness Aware In-memory Key-Value Store .pdf:application/pdf},
+}
+
+@article{su_deep_2023,
+	title = {Deep Cross-Layer Collaborative Learning Network for Online Knowledge Distillation},
+	volume = {33},
+	issn = {1558-2205},
+	url = {https://ieeexplore.ieee.org/document/9950279},
+	doi = {10.1109/TCSVT.2022.3222013},
+	abstract = {Recent online knowledge distillation ({OKD}) methods focus on capturing rich and useful intermediate information by performing multi-layer feature learning. Existing works only consider intermediate layer feature maps between the same layers and ignore valuable information across layers, which results in the lack of appropriate cross-layer supervision in detail and the process of learning. Besides, this manner provides insufficient supervision information to supervise the learning of student, since it fails to construct a qualified teacher. In this work, we propose a Deep Cross-layer Collaborative Learning network ({DCCL}) for {OKD}, which efficiently exploits fruitful knowledge of peer student models by keeping appropriate intermediate cross-layer supervision. Specifically, each student gradually integrates its own features at different layers for feature matching, so as to effectively utilize features in low and high levels for learning more composite knowledge. Moreover, we assign a collaborative knowledge learning strategy, in which a qualified teacher is established via fusing the features of last convolution layers for enhancing high-level representation. In this way, all student models continuously transfer the rich teacher’s internal representation as well as capture its dynamic growth process, and in turn assist the learning of the fusion teacher to further supervise students. In the experiments, our proposed {DCCL} has shown great generalization ability with various backbone models on {CIFAR}-100, Tiny {ImageNet} and {ImageNet}, and also demonstrated superior performance against mainstream {OKD} works. Our code is available here: https://github.com/nanxiaotong/{DCCL}.},
+	pages = {2075--2087},
+	number = {5},
+	journaltitle = {{IEEE} Transactions on Circuits and Systems for Video Technology},
+	author = {Su, Tongtong and Liang, Qiyu and Zhang, Jinsong and Yu, Zhaoyang and Xu, Ziyue and Wang, Gang and Liu, Xiaoguang},
+	urldate = {2024-06-20},
+    year = {2023},
+	date = {2023-05},
+	note = {Conference Name: {IEEE} Transactions on Circuits and Systems for Video Technology},
+	keywords = {Collaboration, model compression, Cross layer design, Deep Learning, Feature extraction, Knowledge engineering, online knowledge distillation, Representation learning, Training, Visualization},
+	file = {IEEE Xplore Abstract Record:/home/wilson/Zotero/storage/PMMFFY6B/9950279.html:text/html},
+}
+
+@inproceedings{geng_er-kv_2021,
+	title = {{ER}-{KV}: High Performance Hybrid Fault-Tolerant Key-Value Store},
+	url = {https://ieeexplore.ieee.org/document/9780898},
+	doi = {10.1109/HPCC-DSS-SmartCity-DependSys53884.2021.00050},
+	shorttitle = {{ER}-{KV}},
+	abstract = {In-memory Key-Value store ({KV}-store) has been widely used to meet increasing performance requirements. Such system stores user data in main memory and when a node fails, all data will be lost due to the volatile nature of {DRAM}. Therefore, it usually takes fault-tolerance mechanisms such as primary-backup replication ({PBR}) and erasure coding to ensure reliability and availability. {PBR} achieves high availability and scalability at the cost of high data redundancy. Erasure coding has higher utilization of storage but introduces additional computing and network overhead. This paper presents a high-performance fault-tolerant distributed {KV}-store, the Erasure-coded Replication {KV} ({ER}-{KV}), which takes advantage of both erasure coding and {PBR} by applying a two-level fault-tolerant mechanism. To achieve both fast recovery speed and low storage overhead, {ER}-{KV} gives priority to {PBR} for fault tolerance but will turn to erasure coding for data recovery when backup nodes are all offline. When generating parity data, {ER}-{KV} leverages erasure coding for large value while applying {PBR} to small-sized key to avoid frequent encoding and decoding. {ER}-{KV} also introduces pipelining into erasure coding to improve system performance, and simultaneously, {ER}-{KV} still maintains data consistency. Besides, {ER}-{KV} applies persistent memory ({PM}) to achieve the persistence of redundant data and improve recovery speed. We have applied {ER}-{KV} to Redis and the experimental results show that it saves 33\% of storage compared with {PBR}. As for erasure coding, {ER}-{KV} has higher recovery efficiency and system availability. And it also brings 15X-80X speedup in data reconstruction when applying {PM} to backup nodes.},
+	eventtitle = {2021 {IEEE} 23rd Int Conf on High Performance Computing \& Communications; 7th Int Conf on Data Science \& Systems; 19th Int Conf on Smart City; 7th Int Conf on Dependability in Sensor, Cloud \& Big Data Systems \& Application ({HPCC}/{DSS}/{SmartCity}/{DependSys})},
+	pages = {179--188},
+	booktitle = {2021 {IEEE} 23rd Int Conf on High Performance Computing \& Communications; 7th Int Conf on Data Science \& Systems; 19th Int Conf on Smart City; 7th Int Conf on Dependability in Sensor, Cloud \& Big Data Systems \& Application ({HPCC}/{DSS}/{SmartCity}/{DependSys})},
+	author = {Geng, Yingjie and Luo, Jinfei and Wang, Gang and Liu, Xiaoguang},
+	urldate = {2024-06-20},
+    year = {2021},
+	date = {2021-12},
+	keywords = {Costs, erasure coding, fault tolerance, Fault tolerance, Fault tolerant systems, key/value store, persistent memory, primary-backup replication, Redundancy, Scalability, Smart cities, System performance},
+	file = {IEEE Xplore Abstract Record:/home/wilson/Zotero/storage/BEVZEQPP/9780898.html:text/html},
+}
+
+@article{he_flatlsm_2023,
+	title = {{FlatLSM}: Write-Optimized {LSM}-Tree for {PM}-Based {KV} Stores},
+	volume = {19},
+	issn = {1553-3077, 1553-3093},
+	url = {https://dl.acm.org/doi/10.1145/3579855},
+	doi = {10.1145/3579855},
+    year = {2023},
+	shorttitle = {{FlatLSM}},
+	abstract = {The Log-Structured Merge Tree ({LSM}-Tree) is widely used in key-value ({KV}) stores because of its excwrite performance. But {LSM}-Tree-based {KV} stores still have the overhead of write-ahead log and write stall caused by slow
+              
+                L
+                0
+              
+              flush and
+              
+                L
+                0
+              
+              -
+              
+                L
+                1
+              
+              compaction. New byte-addressable, persistent memory ({PM}) devices bring an opportunity to improve the write performance of {LSM}-Tree. Previous studies on {PM}-based {LSM}-Tree have not fully exploited {PM}’s “dual role” of main memory and external storage. In this article, we analyze two strategies of memtables based on {PM} and the reasons write stall problems occur in the first place. Inspired by the analysis result, we propose {FlatLSM}, a specially designed flat {LSM}-Tree for non-volatile memory based {KV} stores. First, we propose {PMTable} with separated index and data. The {PM} Log utilizes the Buffer Log to store {KVs} of size less than 256B. Second, to solve the write stall problem, {FlatLSM} merges the volatile memtables and the persistent
+              
+                L
+                0
+              
+              into large {PMTables}, which can reduce the depth of {LSM}-Tree and concentrate I/O bandwidth on
+              
+                L
+                0
+              
+              -
+              
+                L
+                1
+              
+              compaction. To mitigate write stall caused by flushing large {PMTables} to {SSD}, we propose a parallel flush/compaction algorithm based on {KV} separation. We implemented {FlatLSM} based on {RocksDB} and evaluated its performance on Intel’s latest {PM} device, the Intel Optane {DC} {PMM} with the state-of-the-art {PM}-based {LSM}-Tree {KV} stores, {FlatLSM} improves the throughput 5.2× on random write workload and 2.55× on {YCSB}-A.},
+	pages = {1--26},
+	number = {2},
+	journaltitle = {{ACM} Transactions on Storage},
+	shortjournal = {{ACM} Trans. Storage},
+	journal = {{ACM} Trans. Storage},
+	author = {He, Kewen and An, Yujie and Luo, Yijing and Liu, Xiaoguang and Wang, Gang},
+	urldate = {2024-06-28},
+	date = {2023-05-31},
+	langid = {english},
+	file = {He et al. - 2023 - FlatLSM Write-Optimized LSM-Tree for PM-Based KV .pdf:/home/wilson/Zotero/storage/TALAQJHN/He et al. - 2023 - FlatLSM Write-Optimized LSM-Tree for PM-Based KV .pdf:application/pdf},
+}
+
+@inproceedings{yang_gl-cache_nodate,
+	location = {USA},
+	title = {{GL}-Cache: Group-level learning for efficient and high-performance caching},
+	abstract = {Web applications rely heavily on software caches to achieve low-latency, high-throughput services. To adapt to changing workloads, three types of learned caches (learned evictions) have been designed in recent years: object-level learning, learning-from-distribution, and learning-from-simple-experts. However, we argue that the learning granularity in existing approaches is either too fine (object-level), incurring significant computation and storage overheads, or too coarse (workload or expert-level) to capture the differences between objects and leaves a considerable efficiency gap.},
+	author = {Yang, Juncheng and Mao, Ziming and Yue, Yao and Rashmi, K V},
+    year = {2023},
+	langid = {english},
+	file = {Yang et al. - GL-Cache Group-level learning for efficient and h.pdf:/home/wilson/Zotero/storage/6LCVHBVR/Yang et al. - GL-Cache Group-level learning for efficient and h.pdf:application/pdf},
+	booktitle = {Proceedings of the 21th USENIX Conference on File and Storage Technologies},
+	eventtitle = {{FAST} {USENIX}: 21th USENIX Conference on File and Storage Technologies},
+}
+
+@inproceedings{mcallister_kangaroo_2021,
+	location = {Virtual Event Germany},
+	title = {Kangaroo: Caching Billions of Tiny Objects on Flash},
+	isbn = {978-1-4503-8709-5},
+	url = {https://dl.acm.org/doi/10.1145/3477132.3483568},
+	doi = {10.1145/3477132.3483568},
+	shorttitle = {Kangaroo},
+	abstract = {Many social-media and {IoT} services have very large working sets consisting of billions of tiny (≈100 B) objects. Large, flash-based caches are important to serving these working sets at acceptable monetary cost. However, caching tiny objects on flash is challenging for two reasons: (i) {SSDs} can read/write data only in multi-{KB} “pages” that are much larger than a single object, stressing the limited number of times flash can be written; and (ii) very few bits per cached object can be kept in {DRAM} without losing flash’s cost advantage. Unfortunately, existing flash-cache designs fall short of addressing these challenges: write-optimized designs require too much {DRAM}, and {DRAM}-optimized designs require too many flash writes.},
+	eventtitle = {{SOSP} '21: {ACM} {SIGOPS} 28th Symposium on Operating Systems Principles},
+	pages = {243--262},
+	booktitle = {Proceedings of the {ACM} {SIGOPS} 28th Symposium on Operating Systems Principles},
+	publisher = {{ACM}},
+	author = {{McAllister}, Sara and Berg, Benjamin and Tutuncu-Macias, Julian and Yang, Juncheng and Gunasekar, Sathya and Lu, Jimmy and Berger, Daniel S. and Beckmann, Nathan and Ganger, Gregory R.},
+	urldate = {2024-08-22},
+    year = {2021},
+	date = {2021-10-26},
+	langid = {english},
+	file = {McAllister et al. - 2021 - Kangaroo Caching Billions of Tiny Objects on Flas.pdf:/home/wilson/Zotero/storage/NP6LVWD7/McAllister et al. - 2021 - Kangaroo Caching Billions of Tiny Objects on Flas.pdf:application/pdf},
+}
+
+@inproceedings{qiu_frozenhot_2023,
+	location = {Rome Italy},
+	title = {{FrozenHot} Cache: Rethinking Cache Management for Modern Hardware},
+	isbn = {978-1-4503-9487-1},
+	url = {https://dl.acm.org/doi/10.1145/3552326.3587446},
+	doi = {10.1145/3552326.3587446},
+	shorttitle = {{FrozenHot} Cache},
+	abstract = {Caching is crucial for accelerating data access, employed as a ubiquitous design in modern systems at many parts of computer systems. With increasing core count, and shrinking latency gap between cache and modern storage devices, hit-path scalability becomes increasingly critical. However, existing production in-memory caches often use list-based management with promotion on each cache hit, which requires extensive locking and poses a significant overhead for scaling beyond a few cores. Moreover, existing techniques for improving scalability either (1) only focus on the indexing structure and do not improve cache management scalability, or (2) sacrifice efficiency or miss-path scalability. Inspired by highly skewed data popularity and short-term hotspot stability in cache workloads, we propose {FrozenHot}, a generic approach to improve the scalability of listbased caches. {FrozenHot} partitions the cache space into two parts: a frozen cache and a dynamic cache. The frozen cache serves requests for hot objects with minimal latency by eliminating promotion and locking, while the latter leverages the existing cache design to achieve workload adaptivity. We built {FrozenHot} as a library that can be easily integrated into existing systems. We demonstrate its performance by enabling {FrozenHot} in two production systems: {HHVM} and {RocksDB} using under 100 lines of code. Evaluated using production traces from {MSR} and Twitter, {FrozenHot} improves the throughput of three baseline cache algorithms by up to 551\%. Compared to stock {RocksDB}, {FrozenHot}-enhanced {RocksDB} shows a higher throughput on all {YCSB} workloads with up to 90\% increase, as well as reduced tail latency.},
+	eventtitle = {{EuroSys} '23: Eighteenth European Conference on Computer Systems},
+	pages = {557--573},
+	booktitle = {Proceedings of the Eighteenth European Conference on Computer Systems},
+	publisher = {{ACM}},
+	author = {Qiu, Ziyue and Yang, Juncheng and Zhang, Juncheng and Li, Cheng and Ma, Xiaosong and Chen, Qi and Yang, Mao and Xu, Yinlong},
+	urldate = {2024-08-22},
+    year = {2024},
+	date = {2023-05-08},
+	langid = {english},
+	file = {Qiu et al. - 2023 - FrozenHot Cache Rethinking Cache Management for M.pdf:/home/wilson/Zotero/storage/WBZX4SVV/Qiu et al. - 2023 - FrozenHot Cache Rethinking Cache Management for M.pdf:application/pdf},
+}
+
+@misc{perfbook,
+    author    = {Paul E. McKenney},
+    title     = {Is Parallel Programming Hard, And, If So, What Can You Do About It?},
+    year      = {2024},
+    url       = {https://github.com/paulmckrcu/perfbook},
+    note         = {GitHub repository},
+    howpublished = {\url{https://github.com/paulmckrcu/perfbook}},
+    note      = {Accessed: 2024-08-26},
+}
+
+@inproceedings{timothy_l_harris_pragmatic_2001,
+    title = {A Pragmatic Implementation of Non-Blocking Linked-Lists},
+    volume = {2180},
+    isbn = {978-3-540-42605-9},
+    url = {https://www.microsoft.com/en-us/research/publication/a-pragmatic-implementation-of-non-blocking-linked-lists/},
+    doi = {10.5555/645958.676105},
+    abstract = {We present a new non-blocking implementation of concurrent linked-lists supporting linearizable insertion and deletion operations. The new algorithm provides substantial benefits over previous schemes: it is conceptually simpler and our prototype operates substantially faster.},
+    eventtitle = {the 15th International Symposium on Distributed Computing},
+    pages = {300--314},
+    booktitle = {Proceeings of the 15th International Symposium on Distributed Computing},
+    publisher = {Springer-Verlag},
+    author = {{Timothy L. Harris}},
+    year = {2001},
+    urldate = {2024-08-28},
+    date = {2001-10-03},
+    file = {[Linked List] - [Harris] - A Pragmatic Implementation of Non-Blocking Linked-Lists.pdf:/home/wilson/Zotero/storage/3JN6KRAV/[Linked List] - [Harris] - A Pragmatic Implementation of Non-Blocking Linked-Lists.pdf:application/pdf},
+}
+
+@misc{dirtyzipf2024,
+    author       = {Erik Garrison},
+    title        = {DirtyZipf: A Zipf distribution generator},
+    year         = {2024},
+    url          = {https://github.com/ekg/dirtyzipf/tree/master},
+    note         = {GitHub repository},
+    howpublished = {\url{https://github.com/ekg/dirtyzipf/tree/master}},
+    urldate      = {2024-08-28}
+}
+
+@inproceedings{nurvi_2020_fpga,
+    author={Boutros, Andrew and Nurvitadhi, Eriko and Ma, Rui and Gribok, Sergey and Zhao, Zhipeng and Hoe, James C. and Betz, Vaughn and Langhammer, Martin},
+    booktitle={2020 International Conference on Field-Programmable Technology (ICFPT)}, 
+    title={Beyond Peak Performance: Comparing the Real Performance of AI-Optimized FPGAs and GPUs}, 
+    year={2020},
+    volume={},
+    number={},
+    pages={10-19},
+    keywords={Tensors;Graphics processing units;Ethernet;Computer architecture;Tools;Throughput;Software;FPGA;GPU;Deep Learning;Neural Networks},
+    doi={10.1109/ICFPT51103.2020.00011}
+}
+
+@misc{SMHasher,
+    author = {Austin Appleby},
+    title = {SMHasher - MurmurHash test suite},
+    year = {2008},
+    howpublished = {\url{https://github.com/aappleby/smhasher/}},
+    note = {Accessed: 2024-08-30},
+}
