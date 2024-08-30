@@ -2,10 +2,8 @@
 #include <print>
 #include <generator>
 
-#include "benchmark/benchmark.h"
-#include "toolpex/lru_cache.h"
-
 #include "dirty_zipfian_int_distribution.h"
+#include "naive_lru.h"
 
 namespace 
 {
@@ -27,7 +25,7 @@ namespace
 
     void test_toolpex()
     {
-        toolpex::lru_cache<key_t, value_t> cache(g_cachesz);
+        nbtlru::naive_lru<key_t, value_t> cache(1 << 16);
 
         size_t hits{}, misses{};
         

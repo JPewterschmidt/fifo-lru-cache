@@ -42,6 +42,7 @@ class murmur_hash_x64_128_xor_shift_to_64
 template<::std::integral Int>
 class murmur_hash_x64_128_xor_shift_to_64<Int>
 {
+public:
     ::std::size_t operator()(Int i) const noexcept
     {
         struct buffer_t 
@@ -56,6 +57,7 @@ class murmur_hash_x64_128_xor_shift_to_64<Int>
 template<>
 class murmur_hash_x64_128_xor_shift_to_64<::std::string_view>
 {
+public:
     ::std::size_t operator()(::std::string_view str) const noexcept
     {
         return murmur_bin_hash_x64_128_xor_shift_to_64{}(str);

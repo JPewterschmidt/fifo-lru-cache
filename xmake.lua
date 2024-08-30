@@ -21,18 +21,13 @@ if is_mode("release") then
     set_optimize("fastest", {force = true})
 end
 
-includes("toolpex")
-
 target("nbtlru")
     set_kind("headeronly")
     set_warnings("all", "error")
     add_includedirs(
         "include", 
-        { public = true }
-    )
-    add_includedirs(
         "smhasher/src",
-        { public = false }
+        { public = true }
     )
 
 target("test")
@@ -62,7 +57,7 @@ target("benchmark")
     add_includedirs("dirtyzipf")
     add_packages("csv2")
     set_policy("build.warning", true)
-    add_deps("toolpex")
+    add_deps("nbtlru")
     add_packages(
         "gflags", 
         "concurrentqueue"
