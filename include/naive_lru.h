@@ -6,6 +6,7 @@
 #include <cassert>
 #include <utility>
 #include <optional>
+#include <stdexcept>
 #include <functional>
 #include <unordered_map>
 #include <memory_resource>

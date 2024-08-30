@@ -63,5 +63,19 @@ target("benchmark")
         "concurrentqueue"
     )
     after_run(function (target)
-        os.execv("python scripts/different_dist_on_naive.py", target:targetdir())
+        print("drawing pictures ... ")
+        os.execv(
+            "python", { 
+                "scripts/different_dist_on_naive.py", 
+                target:targetdir() .. "/different_dist_on_naive.csv", 
+                "experiment-report/pics/different_dist_on_naive.png"
+            }
+        )
+        
+        print("compiling report ... ")
+
+        old_working_dir = os.workingdir()
+        os.cd('experiment-report')
+        os.execv("xelatex", { "main.tex" })
+        os.cd(old_working_dir)
     end)

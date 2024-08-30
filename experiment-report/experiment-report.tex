@@ -18,6 +18,15 @@ hash 函数选用 MurmurHash3 \cite{SMHasher}
 
 \subsection{性能测试}
 
+\subsubsection{测试环境}
+
+\begin{itemize}
+    \item Intel Core I7 8750H 2.20GHz - 4.10GHz
+    \item 16GB RAM
+    \item \verb|GCC 13.3.1 20240614|
+    \item \verb|Linux 6.6.47-gentoo-dist x86_64 GNU/Linux|
+\end{itemize}
+
 \subsubsection{测试方法}
 
 本实验分别对
@@ -27,16 +36,31 @@ hash 函数选用 MurmurHash3 \cite{SMHasher}
     \item 为多线程设计实现的缓存
 \end{enumerate}
 进行测试，按照实验要求测试数据量为$10^6$项，每项key为8B，value为16B 的数据。
+缓存大小设置为数据集大小的 $10\%$.
 其中第二项和第三项将会测试其在不同线程数量时的性能对比。
+以体现 lock contention 等资源竞争对性能的影响。
 上述三种缓存实现均采用LRU作为淘汰算法，
-因此只在基准测试中采用多种随机生成分布，
-在对上述第2项和第3项测试时，仅采用 Zipf 分布\cite{dirtyzipf2024}。
 
-\subsubsection{测试环境}
+由于本实验只使用一种淘汰算法，
+所以只在基准测试中采用多种随机分布以体现缓存在处理服从不同分布数据是的行为。
+因此在对上述第2项和第3项测试时，仅采用 Zipfian 分布\cite{dirtyzipf2024}。
 
-\begin{itemize}
-    \item Intel Core I7 8750H 2.20GHz - 4.10GHz
-    \item 16GB RAM
-    \item \verb|GCC 13.3.1 20240614|
-    \item \verb|Linux 6.6.47-gentoo-dist x86_64 GNU/Linux|
-\end{itemize}
+\subsubsection{基准测试}
+
+本小节主要描述对单线程下，无任何并发保护的简单 \verb|naive_lru| 的测试。
+用于展示测试数据服从四种不同分布时LRU Cache的性能。
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\textwidth]{pics/differnent_dist_on_naive.png}
+    \caption{测试数据在服从四种不同分布时LRU Cache的行为}
+    \label{fig:4-different-dists-lru-hit-ratio}
+\end{figure}
+
+由于语料词频率，网站访问频率等随机事件服从Zipfian分布，
+所以使用该分布生成的随机访问具有较好的局部性，符合缓存的应用场景。
+如图\ref{fig:4-different-dists-lru-hit-ratio}所示，
+当测试数据分布服从 Zipfian 分布时，缓存命中率远高于其他分布。
+单从这点上看，LRU比较适合作为缓存淘汰算法。
+
+

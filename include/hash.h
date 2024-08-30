@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <string>
+#include <span>
 #include "MurmurHash3.h"
 
 namespace nbtlru
