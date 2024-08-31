@@ -36,6 +36,12 @@ public:
         }
     }
 
+    void reset()
+    {
+        m_cache_map.clear();
+        m_cache_list.clear();
+    }
+
     bool contains(const KeyType& key) const noexcept
     {
         return m_cache_map.contains(key);

@@ -45,7 +45,7 @@ hash 函数选用 MurmurHash3 \cite{SMHasher}
 所以只在基准测试中采用多种随机分布以体现缓存在处理服从不同分布数据是的行为。
 因此在对上述第2项和第3项测试时，仅采用 Zipfian 分布\cite{dirtyzipf2024}。
 
-\subsubsection{基准测试}
+\subsubsection{在Na\"{i}ve缓存上应用不同的随机分布}
 
 本小节主要描述对单线程下，无任何并发保护的简单 \verb|naive_lru| 的测试。
 用于展示测试数据服从四种不同分布时LRU Cache的性能。
@@ -62,5 +62,16 @@ hash 函数选用 MurmurHash3 \cite{SMHasher}
 如图\ref{fig:4-different-dists-lru-hit-ratio}所示，
 当测试数据分布服从 Zipfian 分布时，缓存命中率远高于其他分布。
 单从这点上看，LRU比较适合作为缓存淘汰算法。
+
+\subsubsection{一把锁保护的Na\"{i}ve缓存}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\textwidth]{pics/multi_threads_on_naive.png}
+    \caption{随线程数增加的测试耗时}
+    \label{fig:multi-thread-naive}
+\end{figure}
+
+\subsubsection{lock-free缓存}
 
 

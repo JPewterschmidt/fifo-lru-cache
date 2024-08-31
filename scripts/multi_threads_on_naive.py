@@ -10,9 +10,11 @@ if len(sys.argv) <= 2:
 csvname = sys.argv[1]
 output = sys.argv[2]
 df = pd.read_csv(csvname)
+df = pd.DataFrame(df.mean())
+df.columns = ['cost']
 
 plt.figure(figsize=(10, 6))
-sns.scatterplot(data=df, x='thrnum', y='cost', color='red', s=50)
+sns.scatterplot(data=df, x=df.index, y='cost', color='red', s=50)
 plt.xlabel("Thread Number")
 plt.ylabel("Time Elapsed (ms)")
 plt.xticks(range(1, len(df) + 1))

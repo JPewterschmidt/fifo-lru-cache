@@ -9,9 +9,9 @@ namespace nbtlru
 {
     template<template<typename> typename Dist, 
              ::std::integral Int = uint64_t>
-    ::std::generator<Int> gen(Int scale)
+    ::std::generator<Int> gen(Int scale, bool random_device_enable = false)
     {
-        ::std::mt19937 rng(42);
+        ::std::mt19937_64 rng(random_device_enable ? ::std::random_device{}() : 42);
         Dist<Int> dist(Int{}, scale);
         for (size_t i{}; i < scale; ++i)
         {
