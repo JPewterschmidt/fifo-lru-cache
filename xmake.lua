@@ -21,6 +21,8 @@ if is_mode("release") then
     set_optimize("fastest", {force = true})
 end
 
+add_includedirs("libcuckoo/libcuckoo")
+
 target("nbtlru")
     set_kind("headeronly")
     set_warnings("all", "error")

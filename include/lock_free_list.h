@@ -1,9 +1,11 @@
 #ifndef NBTLRU_LOCK_FREE_LIST_H
 #define NBTLRU_LOCK_FREE_LIST_H
 
+#include <atomic>
 #include <memory>
 #include <utility>
 #include <cassert>
+#include <concepts>
 
 namespace nbtlru
 {
@@ -12,26 +14,43 @@ template<typename T>
 class lock_free_list
 {
 public:
-    struct node : public ::std::enable_shared_from_this<node>
+    class node : public ::std::enable_shared_from_this<node>
     {
+    public:
         node() = default;
 
-        template<typename... TT>
-        node(TT&&... t)
-            : m_obj(::std::make_unique<T>(::std::forward<TT>(t)))
+    private:
+        node(::std::unique_ptr<T> obj) noexcept
+            : m_obj{ ::std::move(obj) }
         {
         }
 
-        ::std::unique_ptr<T> m_obj;
-
-        ::std::shared_ptr<T> element_ptr()
+        template<typename... Args>
+            requires (::std::constructible_from<T, Args...>)
+        void construct_object(Args&&... args)
         {
+            m_obj = ::std::make_unique<T>(::std::forward<Args>(args)...);
+        }
+
+        template<typename> friend class lock_free_list;
+
+        ::std::unique_ptr<T> m_obj{};
+        ::std::atomic<::std::shared_ptr<node>> m_next{};
+        ::std::atomic<::std::weak_ptr<node>> m_prev{};
+
+    public:
+        ::std::shared_ptr<T> element_ptr() noexcept
+        {
+            if (!m_obj) return {};
             return { this->shared_from_this(), m_obj.get() };
         }
 
-        ::std::atomic<::std::shared_ptr<node>> m_next{};
-        ::std::atomic<::std::weak_ptr<node>> m_prev{};
-    }:
+        ::std::shared_ptr<const T> element_ptr() const noexcept
+        {
+            if (!m_obj) return {};
+            return { this->shared_from_this(), m_obj.get() };
+        }
+    };
 
     using node_sptr = ::std::shared_ptr<node>;
     using node_wptr = ::std::weak_ptr<node>;
@@ -52,8 +71,6 @@ public:
         {
             ::std::exchange(cur, cur->m_next.load(::std::memory_order_relaxed)).reset();
         }
-        m_head = {};
-        m_tail = {};
     }
 
     lock_free_list(lock_free_list&& other) noexcept
@@ -66,12 +83,22 @@ public:
     {
         lock_free_list temp(::std::move(*this));
         m_head = ::std::exchange(other.m_head, nullptr);
-        m_prev = ::std::exchange(other.m_prev, nullptr);
+        m_tail = ::std::exchange(other.m_tail, nullptr);
 
         return *this;
     }
 
-    void insert_front(node_sptr new_node)
+    template<typename... Args>
+        requires (::std::constructible_from<T, Args...>)
+    node_sptr insert_front(Args&&... args)
+    {
+        auto newnode = ::std::make_shared<node>();
+        newnode->construct_object(::std::forward<Args>(args)...);
+        insert_front(newnode);
+        return newnode;
+    }
+
+    void insert_front(node_sptr new_node) noexcept
     {
         node_sptr old_front = m_head->m_next.load(::std::memory_order_acquire);
         new_node->m_next.store(old_front, ::std::memory_order_relaxed);
@@ -81,13 +108,13 @@ public:
                old_front, new_node, 
                ::std::memory_order_release, ::std::memory_order_relaxed))
         {
-            new_node->next.store(old_front, ::std::memory_order_relaxed);
+            new_node->m_next.store(old_front, ::std::memory_order_relaxed);
         }
 
         old_front->m_prev.store(new_node, ::std::memory_order_release);
     }
 
-    void detach_node(node_sptr node)
+    void detach_node(node_sptr node) noexcept
     {
         assert(node && node != m_head && node != m_tail);
         node_sptr prev_node = node->m_prev.load(::std::memory_order_acquire).lock();
@@ -114,7 +141,7 @@ public:
         node->m_prev.store(nullptr, ::std::memory_order_relaxed);
     }
 
-    ::std::unique_ptr<node> detach_last_node()
+    node_sptr detach_last_node() noexcept
     {
         node_sptr last_node{};
         node_sptr prev_node{};
@@ -135,6 +162,16 @@ public:
         last_node->m_prev.store(nullptr, ::std::memory_order_release);
 
         return last_node;
+    }
+
+    template<typename Iter>
+    void unsafe_dup(Iter beg) const
+    {
+        auto cur = m_head->m_next.load(::std::memory_order_relaxed);
+        for (Iter i = beg; cur && cur != m_tail; ++i, cur = cur->m_next.load(::std::memory_order_relaxed))
+        {
+            *i = *cur->m_obj;
+        }
     }
 
 private:

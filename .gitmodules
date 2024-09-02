@@ -10,3 +10,6 @@
 [submodule "rustex"]
 	path = rustex
 	url = git@github.com:dragazo/rustex.git
+[submodule "libcuckoo"]
+	path = libcuckoo
+	url = git@github.com:efficient/libcuckoo.git
