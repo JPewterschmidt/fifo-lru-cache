@@ -31,7 +31,8 @@ inline auto tic() { return ::std::chrono::high_resolution_clock::now(); }
 ::std::chrono::nanoseconds toc(auto tp) { return ::std::chrono::duration_cast<::std::chrono::nanoseconds>(tic() - tp); }
 
 void different_dist_on_naive();
-void multi_threads_on_naive(size_t thrnum = 12);
+void multi_threads_on_naive_in_total(size_t thrnum = 12);
+::std::chrono::nanoseconds multi_threads_on_naive(size_t thrnum = 12);
 
 } // namespace nbtlru
 

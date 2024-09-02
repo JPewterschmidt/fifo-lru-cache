@@ -74,9 +74,9 @@ target("benchmark")
         )
         os.execv(
             "python", { 
-                "scripts/multi_threads_on_naive.py", 
-                target:targetdir() .. "/multi_threads_on_naive.csv", 
-                "experiment-report/pics/multi_threads_on_naive.png"
+                "scripts/multi_threads_on_naive_in_total.py", 
+                target:targetdir() .. "/multi_threads_on_naive_in_total.csv", 
+                "experiment-report/pics/multi_threads_on_naive_in_total"
             }
         )
         

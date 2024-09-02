@@ -13,7 +13,46 @@ hash 函数选用 MurmurHash3 \cite{SMHasher}
 并在\cite{timothy_l_harris_pragmatic_2001}方案的基础上，增加\verb|splice|操作，
 以满足置换算法的需要。
 
-\subsection{实现细节}
+\subsection{并行实现细节}
+
+\subsubsection{目标分析}
+
+本实验实现的LRU缓存在单线程下，
+相比多线程下只由一把锁控制的版本，
+性能要好非常多\footnote{详见\ref{sec:one-mutex}} 。
+这主要是由随线程数量增长的管理成本造成的。
+其中就包括锁竞争，调度造成的上下文切换以及并发控制破坏了指令流水化。
+除了上述条件，对整个缓存对象上锁如此粗的管理粒度也是造成性能损失的重要原因。
+
+在利用链表的LRU缓存中，利用元素在链表中的位置关系表达元素 aging.
+每次缓存失配被淘汰掉的对象都会从链表尾选取；
+新进入缓存的对象或者被命中的对象都是插入到链表的头部。
+即在LRU算法中的双向链表的变动主要发生在头部和尾部。
+这么看，一把锁的管理范围就太广了：
+为了对操作头尾的并发访问进行控制，连同链表中间部分也不得被访问。
+因此，可以从锁粒度入手对系统进行优化。
+但是这种优化方案仍然需要缓存操作在所有核心之间可见，
+也总是会需要触发CPU缓存一致性算法，
+仍然有不可避免的随线程数增加而增加的并发管理成本。
+
+使用链表元素相对位置关系表达 aging 每次缓存操作都需要对元素位置进行调整，
+以确保缓存能够反映工作集变化。
+从多线程的角度上来看这每次访问都需要将变化传递到各核心，
+导致随线程数线性增长的写放大效应。
+Redis 采用的基于时间戳的方案就可以避免这个问题，
+通过计算当前时间和元素上次访问事件的差就可以表达两个元素的相对aging关系。
+这样成功命中的缓存访问就不再触发写入，这对CPU缓存是很友好的。
+但是元素在缓存中是乱续存放的，
+这种情况下要像链表方案精确找到真正的最近最久未使用元素需遍历整个缓存($O(n)$)。
+这种开销显然是不可接收的。因此Redis只是从已由元素中随机选取固定数量个对象，
+对他们的时间戳进行比对，然后从中选取对合适的淘汰$O(1)$。
+该算法通过多次随机抽样保证相对较热的对象不会被淘汰出缓存，保证了其有效性。
+
+Redis通过上述抽样LRU避免了写放大，
+但我认为其优秀的并发表现主要还是取决于其优秀的架构设计。
+总体而言 Redis利用key以及hash函数将数据分区，然后转发给各Redis节点处理，
+这些节点内部是单线程运行的，因此诸如 lock contention CPU缓存不友好等问题就可以避免了。
+这样的代码也更容易被编译器优化。
 
 
 \subsection{性能测试}
@@ -23,36 +62,18 @@ hash 函数选用 MurmurHash3 \cite{SMHasher}
 \begin{itemize}
     \item Intel Core I7 8750H 2.20GHz - 4.10GHz
     \item 16GB RAM
-    \item \verb|GCC 13.3.1 20240614|
+    \item \verb|GCC 13.3.1 20240614| 线程模型：Pthread
     \item \verb|Linux 6.6.47-gentoo-dist x86_64 GNU/Linux|
 \end{itemize}
 
-\subsubsection{测试方法}
-
-本实验分别对
-\begin{enumerate}
-    \item 单线程缓存（基准）
-    \item 多线程条件下一把锁保护的基准缓存
-    \item 为多线程设计实现的缓存
-\end{enumerate}
-进行测试，按照实验要求测试数据量为$10^6$项，每项key为8B，value为16B 的数据。
-缓存大小设置为数据集大小的 $10\%$.
-其中第二项和第三项将会测试其在不同线程数量时的性能对比。
-以体现 lock contention 等资源竞争对性能的影响。
-上述三种缓存实现均采用LRU作为淘汰算法，
-
-由于本实验只使用一种淘汰算法，
-所以只在基准测试中采用多种随机分布以体现缓存在处理服从不同分布数据是的行为。
-因此在对上述第2项和第3项测试时，仅采用 Zipfian 分布\cite{dirtyzipf2024}。
-
-\subsubsection{在Na\"{i}ve缓存上应用不同的随机分布}
+\subsubsection{单线程LRU算法测试}
 
 本小节主要描述对单线程下，无任何并发保护的简单 \verb|naive_lru| 的测试。
 用于展示测试数据服从四种不同分布时LRU Cache的性能。
 
 \begin{figure}
     \centering
-    \includegraphics[width=0.5\textwidth]{pics/differnent_dist_on_naive.png}
+    \includegraphics[width=0.5\textwidth]{pics/different_dist_on_naive.png}
     \caption{测试数据在服从四种不同分布时LRU Cache的行为}
     \label{fig:4-different-dists-lru-hit-ratio}
 \end{figure}
@@ -63,15 +84,72 @@ hash 函数选用 MurmurHash3 \cite{SMHasher}
 当测试数据分布服从 Zipfian 分布时，缓存命中率远高于其他分布。
 单从这点上看，LRU比较适合作为缓存淘汰算法。
 
-\subsubsection{一把锁保护的Na\"{i}ve缓存}
+\subsubsection{一把锁保护的Na\"{i}ve缓存} \label{sec:one-mutex}
 
 \begin{figure}
     \centering
-    \includegraphics[width=0.5\textwidth]{pics/multi_threads_on_naive.png}
-    \caption{随线程数增加的测试耗时}
-    \label{fig:multi-thread-naive}
+    \includegraphics[width=0.9\textwidth]{pics/multi_threads_on_naive_in_total.png}
+    \caption{随线程数增加(1-12)测试系统完成对$10^6$次缓存访问消耗的总时长}
+    \label{fig:multi-thread-naive-in-total}
 \end{figure}
 
-\subsubsection{lock-free缓存}
+\begin{figure}
+    \centering
+    \includegraphics[width=0.9\textwidth]{pics/multi_threads_on_naive_in_total2.png}
+    \caption{随线程数增加(1-30)测试系统完成对$10^6$次缓存访问消耗的总时长}
+    \label{fig:multi-thread-naive-in-total-2}
+\end{figure}
 
+本小节对只有一把锁进行并发管理的Na\"{i}ve缓存进行性能测试，
+主要观察线程数量对单锁结构管理开销的影响。
+
+测试内容：在不同的线程数量
+\footnote{分别限制线程数量在CPU核心（虚拟）数量内，以及超出CPU核心（虚拟）数量}下，
+系统完成对$10^6$次缓存访问所耗时间。
+
+测试方法：测试程序开\verb|-O3|编译;
+分别开$n = 1, 2, 3, \dots, 12$个线程并发地
+进行服从Zipfian分布的总共$10^6$次随机缓存访问，
+每个线程访问 $10^6 / n$ 次。上述过程重复执行5轮，最后取平均。
+每轮测试中$n$无序，但保证$n = 1, \dots, 12$均被取到。
+
+如图\ref{fig:multi-thread-naive-in-total} 所示，线程数量在CPU核心数（虚拟）内时，
+系统所消耗时间大致成正比。
+这大致可以反映当只有一把锁或者并发控制粒度比较粗时，
+管理开销会随参与共享同一对象的线程数量增加而增加。
+管理开销受到锁竞争，进程上下文切换以及访存等因素印象。
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.6\textwidth]{pics/multi_threads_on_naive_lockcost.png}
+    \caption{不同线程数下锁操作耗时}
+    \label{fig:multi-thread-naive-lockcost}
+\end{figure}
+
+图\ref{fig:multi-thread-naive-in-total}中当线程数为2时，实验的耗时表现是反直觉的。
+本人猜测是因为当线程数为2时，线程调度时出现的边缘情况，
+与锁无关。本实验为验证这一点，使用 \verb|perf| 测试了线程数
+$\allowbreak n = 1, 2, \dots, 14, 20, 30, 40, 50$
+时，\verb|lock| 和 \verb|unlock| 调用的耗时百分比。
+如图\ref{fig:multi-thread-naive-lockcost}所示，
+当$n=2$时，锁操作占比为$6.41\%$与相邻其他数据差异比较显著。
+因此，我认为上文中提到的反直觉表现，与锁无关。
+另外，图\ref{fig:multi-thread-naive-lockcost}中还可以观察到：
+当线程数$n \geq 12$时\footnote{灰线所示；Intel Core I7 8750H 有6个物理核心，12虚拟核心}
+锁操作开销占比不再有明显增长趋势，这是因为测试平台最多支持12个线程同时运行，
+最多只有12个线程竞争这把锁。
+
+另外，如图\ref{fig:multi-thread-naive-in-total-2}，
+当线程数量超过CPU的最大核心（虚拟）数后，由于频繁的线程调度和切换
+导致严重的管理耗时，经上文讨论可知：并发数量超过系统负载后，
+显著多出的管理耗时与\verb|lock|和\verb|unlock|逻辑无关。
+
+\subsection{使用 lock-free 技术实现的 缓存}
+
+基于上文对优化目标的分析，以及LRU算法需要可知
+该算法对链表操作仅包括两项：
+\begin{itemize}
+    \item 从链表中分离任意节点
+    \item 在链表头部插入节点
+\end{itemize}
 
