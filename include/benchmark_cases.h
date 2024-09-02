@@ -1,7 +1,6 @@
 #ifndef NBTLRU_BENCHMARK_CASES_H
 #define NBTLRU_BENCHMARK_CASES_H
 
-#include <cstdint>
 #include <cstddef>
 
 namespace nbtlru
@@ -16,7 +15,7 @@ static inline consteval size_t benchmark_cache_size() noexcept { return   100'00
 void benchmark_loop_body(auto& cache, key_t k, size_t& hits, size_t& misses)
 {
     auto val_opt = cache.get(k);
-    if (val_opt.has_value())
+    if (val_opt)
     {
         ++hits;
     }
@@ -31,8 +30,12 @@ inline auto tic() { return ::std::chrono::high_resolution_clock::now(); }
 ::std::chrono::nanoseconds toc(auto tp) { return ::std::chrono::duration_cast<::std::chrono::nanoseconds>(tic() - tp); }
 
 void different_dist_on_naive();
+
 void multi_threads_on_naive_in_total(size_t thrnum = 12);
 ::std::chrono::nanoseconds multi_threads_on_naive(size_t thrnum = 12);
+
+void multi_threads_on_lockfree_in_total(size_t thrnum = 12);
+::std::chrono::nanoseconds multi_threads_on_lockfree(size_t thrnum = 12);
 
 } // namespace nbtlru
 

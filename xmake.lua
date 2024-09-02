@@ -81,6 +81,13 @@ target("benchmark")
                 "experiment-report/pics/multi_threads_on_naive_in_total"
             }
         )
+        os.execv(
+            "python", { 
+                "scripts/multi_threads_on_naive_in_total.py", 
+                target:targetdir() .. "/multi_threads_on_lockfree_in_total.csv", 
+                "experiment-report/pics/multi_threads_on_lockfree_in_total"
+            }
+        )
         
         print("compiling report ... ")
         old_working_dir = os.workingdir()

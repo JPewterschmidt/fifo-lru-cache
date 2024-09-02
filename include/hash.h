@@ -1,3 +1,6 @@
+#ifndef NBTLRU_HASH_H
+#define NBTLRU_HASH_H
+
 #include <cstddef>
 #include <string>
 #include <span>
@@ -66,3 +69,5 @@ public:
 };
 
 } // namespace nbtlru
+
+#endif

@@ -19,6 +19,12 @@ public:
     public:
         node() = default;
 
+        ~node() noexcept
+        {
+            m_next.store({}, ::std::memory_order_relaxed);
+            m_prev.store({}, ::std::memory_order_relaxed); 
+        }
+
     private:
         node(::std::unique_ptr<T> obj) noexcept
             : m_obj{ ::std::move(obj) }
@@ -139,15 +145,16 @@ public:
         }
         if (next_node)
         {
-            next_node->m_prevq.compare_exchange_weak(
-                node, prev_node, 
+            ::std::weak_ptr weak_node{ node };
+            next_node->m_prev.compare_exchange_weak(
+                weak_node, prev_node, 
                 ::std::memory_order_release, 
                 ::std::memory_order_relaxed
                 );
         }
         
-        node->m_next.store(nullptr, ::std::memory_order_acq_rel);
-        node->m_prev.store(nullptr, ::std::memory_order_acq_rel);
+        node->m_next.store({}, ::std::memory_order_acq_rel);
+        node->m_prev.store({}, ::std::memory_order_acq_rel);
 
         node->m_being_detached.clear(::std::memory_order_release);
 
@@ -162,6 +169,7 @@ public:
     {
         node_sptr last_node{};
         node_sptr prev_node{};
+        node_wptr weak_last_node{ last_node };
         do
         {
             last_node = m_tail->m_prev.load(::std::memory_order_acquire).lock();
@@ -174,15 +182,15 @@ public:
 
             prev_node = last_node->m_prev.load(::std::memory_order_acquire).lock();
         }
-        while ( !m_tail->owner_before(last_node) &&
+        while ( !m_tail.owner_before(last_node) &&
                 !m_tail->m_prev.compare_exchange_weak(
-                    last_node, prev_node, 
+                    weak_last_node, prev_node, 
                     ::std::memory_order_release, 
                     ::std::memory_order_relaxed
                     ));
         prev_node->m_next.store(m_tail, ::std::memory_order_release);
-        last_node->m_next.store(nullptr, ::std::memory_order_release);
-        last_node->m_prev.store(nullptr, ::std::memory_order_release);
+        last_node->m_next.store({}, ::std::memory_order_release);
+        last_node->m_prev.store({}, ::std::memory_order_release);
 
         last_node->m_being_detached.clear(::std::memory_order_acq_rel);
 

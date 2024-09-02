@@ -14,76 +14,16 @@
 #include "distributions.h"
 #include "keys_generator.h"
 
-#include <atomic>
-
 namespace r = ::std::ranges;
 namespace rv = r::views;
 namespace t = ::std::chrono;
-
-class shared_spinlock 
-{
-public:
-    shared_spinlock() : reader_count(0), writer_flag(false) {}
-
-    void lock_shared() 
-    {
-        for (;;) 
-        {
-            // Wait until no writer is active
-            while (writer_flag.load(std::memory_order_acquire)) 
-                ;
-
-            reader_count.fetch_add(1, std::memory_order_acquire);
-
-            // Check writer flag again to avoid race conditions
-            if (!writer_flag.load(std::memory_order_acquire)) 
-            {
-                break;
-            }
-
-            reader_count.fetch_sub(1, std::memory_order_release);
-        }
-    }
-
-    void unlock_shared() 
-    {
-        reader_count.fetch_sub(1, std::memory_order_release);
-    }
-
-    void lock() 
-    {
-        for (;;) 
-        {
-            // Wait until no readers or writers are active
-            while (writer_flag.exchange(true, std::memory_order_acquire)) 
-                ;
-
-            // Wait until all readers are done
-            if (reader_count.load(std::memory_order_acquire) == 0) 
-            {
-                break;
-            }
-
-            writer_flag.store(false, std::memory_order_release);
-        }
-    }
-
-    void unlock() 
-    {
-        writer_flag.store(false, std::memory_order_release);
-    }
-
-private:
-    std::atomic<int> reader_count;
-    std::atomic<bool> writer_flag;
-};
 
 namespace nbtlru
 {
 
 static rustex::mutex<naive_lru<key_t, value_t>> cache(benchmark_cache_size());
  
-t::nanoseconds worker(::std::latch& l, size_t thrnum)
+static t::nanoseconds worker(::std::latch& l, size_t thrnum)
 {
     //cache.lock_mut()->reset();
     l.arrive_and_wait();
