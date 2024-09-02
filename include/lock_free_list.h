@@ -37,6 +37,7 @@ public:
         ::std::unique_ptr<T> m_obj{};
         ::std::atomic<::std::shared_ptr<node>> m_next{};
         ::std::atomic<::std::weak_ptr<node>> m_prev{};
+        ::std::atomic_flag m_being_detached = ATOMIC_FLAG_INIT;
 
     public:
         ::std::shared_ptr<T> element_ptr() noexcept
@@ -114,9 +115,17 @@ public:
         old_front->m_prev.store(new_node, ::std::memory_order_release);
     }
 
-    void detach_node(node_sptr node) noexcept
+    /* Return `true` means this node has been detached successfully by you, 
+     * now, you are the only one holds this node, you can simply drop it, or insert it back to the front.
+     * but if it returns a `false`, that means this node is being detached by another guy, 
+     * and you don't own it, the only things you can do is use it's element.
+     * Do NOT insert it back to the list if it's not detached by you. */
+    bool detach_node(node_sptr node) noexcept
     {
         assert(node && node != m_head && node != m_tail);
+        if (node->m_being_detached.test_and_set(::std::memory_order_acquire))
+            return false;
+
         node_sptr prev_node = node->m_prev.load(::std::memory_order_acquire).lock();
         node_sptr next_node = node->m_next.load(::std::memory_order_acquire);
 
@@ -137,10 +146,18 @@ public:
                 );
         }
         
-        node->m_next.store(nullptr, ::std::memory_order_relaxed);
-        node->m_prev.store(nullptr, ::std::memory_order_relaxed);
+        node->m_next.store(nullptr, ::std::memory_order_acq_rel);
+        node->m_prev.store(nullptr, ::std::memory_order_acq_rel);
+
+        node->m_being_detached.clear(::std::memory_order_release);
+
+        return true;
     }
 
+    /* Return a pointer not equals to `nullptr` means you have successfully detached the last node,
+     * now you can do anything on it. including insert it back to the front.
+     * Or, you can try again, it may returns a `non-nullptr` for you.
+     */
     node_sptr detach_last_node() noexcept
     {
         node_sptr last_node{};
@@ -148,7 +165,13 @@ public:
         do
         {
             last_node = m_tail->m_prev.load(::std::memory_order_acquire).lock();
-            if (last_node == m_head) return {};
+            if (last_node == nullptr
+                || last_node == m_head 
+                || last_node->m_being_detached.test_and_set(::std::memory_order_acquire)) 
+            {
+                return {};
+            }
+
             prev_node = last_node->m_prev.load(::std::memory_order_acquire).lock();
         }
         while ( !m_tail->owner_before(last_node) &&
@@ -160,6 +183,8 @@ public:
         prev_node->m_next.store(m_tail, ::std::memory_order_release);
         last_node->m_next.store(nullptr, ::std::memory_order_release);
         last_node->m_prev.store(nullptr, ::std::memory_order_release);
+
+        last_node->m_being_detached.clear(::std::memory_order_acq_rel);
 
         return last_node;
     }
