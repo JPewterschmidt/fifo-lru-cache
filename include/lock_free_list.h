@@ -99,7 +99,7 @@ public:
         return newnode;
     }
 
-    void insert_front(node_sptr new_node) noexcept
+    void insert_front(node_sptr& new_node) noexcept
     {
         node_sptr old_front = m_head->m_next.load(::std::memory_order_acquire);
         new_node->m_next.store(old_front, ::std::memory_order_relaxed);
@@ -132,8 +132,8 @@ public:
         while (!last_node->m_being_detached.test_and_set(::std::memory_order_acquire));
 
         auto prev_node = last_node->m_prev.load(::std::memory_order_acquire).lock();
-        prev_node->m_next.store(m_tail, ::std::memory_order_acquire);
-        m_tail->m_prev.store(prev_node, ::std::memory_order_acq_rel);
+        prev_node->m_next.store(m_tail, ::std::memory_order_release);
+        m_tail->m_prev.store(prev_node, ::std::memory_order_release);
         last_node->m_being_detached.clear(::std::memory_order_acq_rel);
         last_node->m_prev.store({}, ::std::memory_order_relaxed);
         last_node->m_next.store({}, ::std::memory_order_relaxed);
