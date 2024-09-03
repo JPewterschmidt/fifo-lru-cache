@@ -12,6 +12,9 @@ using   key_t = uint64_t;
 static inline consteval size_t benchmark_scale() noexcept { return 1'000'000; }
 static inline consteval size_t benchmark_cache_size() noexcept { return   100'000; }
 
+//static inline consteval size_t benchmark_scale() noexcept { return 100; }
+//static inline consteval size_t benchmark_cache_size() noexcept { return   30; }
+
 void benchmark_loop_body(auto& cache, key_t k, size_t& hits, size_t& misses)
 {
     auto val_opt = cache.get(k);

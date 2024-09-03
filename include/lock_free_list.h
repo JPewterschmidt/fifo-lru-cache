@@ -19,12 +19,6 @@ public:
     public:
         node() = default;
 
-        ~node() noexcept
-        {
-            m_next.store({}, ::std::memory_order_relaxed);
-            m_prev.store({}, ::std::memory_order_relaxed); 
-        }
-
     private:
         node(::std::unique_ptr<T> obj) noexcept
             : m_obj{ ::std::move(obj) }
@@ -113,7 +107,7 @@ public:
 
         while (!m_head->m_next.compare_exchange_weak(
                old_front, new_node, 
-               ::std::memory_order_release, ::std::memory_order_relaxed))
+               ::std::memory_order_release, ::std::memory_order_acquire))
         {
             new_node->m_next.store(old_front, ::std::memory_order_relaxed);
         }
@@ -121,79 +115,28 @@ public:
         old_front->m_prev.store(new_node, ::std::memory_order_release);
     }
 
-    /* Return `true` means this node has been detached successfully by you, 
-     * now, you are the only one holds this node, you can simply drop it, or insert it back to the front.
-     * but if it returns a `false`, that means this node is being detached by another guy, 
-     * and you don't own it, the only things you can do is use it's element.
-     * Do NOT insert it back to the list if it's not detached by you. */
-    bool detach_node(node_sptr node) noexcept
-    {
-        assert(node && node != m_head && node != m_tail);
-        if (node->m_being_detached.test_and_set(::std::memory_order_acquire))
-            return false;
-
-        node_sptr prev_node = node->m_prev.load(::std::memory_order_acquire).lock();
-        node_sptr next_node = node->m_next.load(::std::memory_order_acquire);
-
-        if (prev_node)
-        {
-            prev_node->m_next.compare_exchange_weak(
-                node, next_node, 
-                ::std::memory_order_release, 
-                ::std::memory_order_relaxed
-                );
-        }
-        if (next_node)
-        {
-            ::std::weak_ptr weak_node{ node };
-            next_node->m_prev.compare_exchange_weak(
-                weak_node, prev_node, 
-                ::std::memory_order_release, 
-                ::std::memory_order_relaxed
-                );
-        }
-        
-        node->m_next.store({}, ::std::memory_order_acq_rel);
-        node->m_prev.store({}, ::std::memory_order_acq_rel);
-
-        node->m_being_detached.clear(::std::memory_order_release);
-
-        return true;
-    }
-
     /* Return a pointer not equals to `nullptr` means you have successfully detached the last node,
      * now you can do anything on it. including insert it back to the front.
-     * Or, you can try again, it may returns a `non-nullptr` for you.
-     */
+     * Or, you can try again, it may returns a `non-nullptr` for you. */
     node_sptr detach_last_node() noexcept
     {
-        node_sptr last_node{};
-        node_sptr prev_node{};
-        node_wptr weak_last_node{ last_node };
+        node_sptr last_node;
         do
         {
             last_node = m_tail->m_prev.load(::std::memory_order_acquire).lock();
-            if (last_node == nullptr
-                || last_node == m_head 
-                || last_node->m_being_detached.test_and_set(::std::memory_order_acquire)) 
+            if (last_node == m_head)
             {
                 return {};
             }
-
-            prev_node = last_node->m_prev.load(::std::memory_order_acquire).lock();
         }
-        while ( !m_tail.owner_before(last_node) &&
-                !m_tail->m_prev.compare_exchange_weak(
-                    weak_last_node, prev_node, 
-                    ::std::memory_order_release, 
-                    ::std::memory_order_relaxed
-                    ));
-        prev_node->m_next.store(m_tail, ::std::memory_order_release);
-        last_node->m_next.store({}, ::std::memory_order_release);
-        last_node->m_prev.store({}, ::std::memory_order_release);
+        while (!last_node->m_being_detached.test_and_set(::std::memory_order_acquire));
 
+        auto prev_node = last_node->m_prev.load(::std::memory_order_acquire).lock();
+        prev_node->m_next.store(m_tail, ::std::memory_order_acquire);
+        m_tail->m_prev.store(prev_node, ::std::memory_order_acq_rel);
         last_node->m_being_detached.clear(::std::memory_order_acq_rel);
-
+        last_node->m_prev.store({}, ::std::memory_order_relaxed);
+        last_node->m_next.store({}, ::std::memory_order_relaxed);
         return last_node;
     }
 
