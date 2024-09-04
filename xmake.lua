@@ -4,7 +4,8 @@ add_rules(
 )
 
 add_requires(
-    "benchmark", "gtest", "csv2"
+    "benchmark", "gtest", "csv2",
+    "concurrentqueue"
 )
 
 set_languages("c++23", "c17")
@@ -25,6 +26,7 @@ add_includedirs("libcuckoo/libcuckoo")
 
 target("nbtlru")
     set_kind("headeronly")
+    add_packages("concurrentqueue");
     set_warnings("all", "error")
     add_includedirs(
         "include", 

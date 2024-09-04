@@ -6,25 +6,27 @@
 #include <cstddef>
 #include <unordered_map>
 #include "cuckoohash_map.hh"
-#include "lock_free_list.h"
 #include "hash.h"
+#undef BLOCK_SIZE
+#include "concurrentqueue/concurrentqueue.h"
 
 namespace nbtlru
 {
     
 template<
     typename KeyType, 
-    typename ValueType, 
+    typename MappedType, 
     typename Hash = murmur_hash_x64_128_xor_shift_to_64<KeyType>, 
     typename KeyEq = ::std::equal_to<KeyType>>
 class lock_free_lru
 {
 public:
-    using list_type = lock_free_list<::std::pair<KeyType, ValueType>>;
-    using hashmap_type = libcuckoo::cuckoohash_map<KeyType, typename list_type::node_wptr, Hash, KeyEq>;
-    using result_type = ::std::shared_ptr<ValueType>;
-    using node_sptr = typename list_type::node_sptr;
-    using node_wptr = typename list_type::node_wptr;
+    using kv_type = ::std::pair<KeyType, MappedType>;
+    using value_type = ::std::shared_ptr<kv_type>;
+    using weak_value_type = ::std::weak_ptr<kv_type>;
+    using list_type = moodycamel::ConcurrentQueue<value_type>;
+    using hashmap_type = libcuckoo::cuckoohash_map<KeyType, weak_value_type, Hash, KeyEq>;
+    using result_type = ::std::shared_ptr<MappedType>;
 
 private:
     size_t m_capacity{};
@@ -43,30 +45,27 @@ public:
 
     result_type get(const KeyType& k)
     {
-        node_wptr wnode;
-        if (!m_hash.find(k, wnode))
-            return {};
-
-        auto node = wnode.lock();
-        if (!node) return {};
-
-        auto result_kv = node->element_ptr();
-        if (m_list.detach_node(node))
+        weak_value_type weak_kv;
+        value_type kv;
+        if (m_hash.find(k, weak_kv) && (kv = weak_kv.lock()))
         {
-            m_list.insert_front(node);
+            evict_whatever();
+            m_list.enqueue(kv);
+            return { kv, &kv->second };
         }
-        return { result_kv, &result_kv->second };
+        return {};
     }
  
     template<typename... Args>
-        requires (::std::constructible_from<ValueType, Args...>)
+        requires (::std::constructible_from<MappedType, Args...>)
     result_type put(const KeyType& k, Args&&... args)
     {
-        auto node = m_list.insert_front(k, ValueType(::std::forward<Args>(args)...));
-        this->evict_if_needed();
-        m_hash.insert(k, node);
+        value_type kv = ::std::make_shared<kv_type>(k, MappedType(::std::forward<Args>(args)...));
+        m_hash.insert(k, kv);
+        evict_if_needed();
+        m_list.enqueue(kv);
 
-        return { node, &node->element_ptr()->second };
+        return { kv, &kv->second };
     }
 
     size_t size_approx() const noexcept { return m_size.load(::std::memory_order_relaxed); }
@@ -74,14 +73,20 @@ public:
     size_t evict_thresh() const noexcept { return m_evict_thresh; }
 
 private:
-    void evict_if_needed()
+    void evict_if_needed(bool either_map = true)
     {
         if (size_approx() < evict_thresh())
             return;
-        auto node = m_list.detach_last_node();
-        if (!node) return;
-        m_hash.erase(node->element_ptr()->first);
-        m_size.fetch_sub(1, ::std::memory_order_relaxed);
+        evict_whatever(either_map);
+    }
+
+    void evict_whatever(bool either_map = false)
+    {
+        value_type temp;
+        if (m_list.try_dequeue(temp) && either_map)
+        {
+            m_hash.insert(temp->first, weak_value_type{});
+        }
     }
 };
 

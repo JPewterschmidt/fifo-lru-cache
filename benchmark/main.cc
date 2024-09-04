@@ -33,8 +33,8 @@ void foo1(int argc, char** argv)
 int main(int argc, char** argv)
 {
     //different_dist_on_naive();   
-    //multi_threads_on_naive_in_total(12);
-    multi_threads_on_lockfree_in_total(1);
+    //multi_threads_on_naive_in_total(1);
+    multi_threads_on_lockfree_in_total(12);
 
     return 0;   
 }
