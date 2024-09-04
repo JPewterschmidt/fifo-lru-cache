@@ -47,9 +47,15 @@ public:
     {
         weak_value_type weak_kv;
         value_type kv;
-        if (m_hash.find(k, weak_kv) && (kv = weak_kv.lock()))
+        if (m_hash.find(k, weak_kv))
         {
-            evict_whatever();
+            kv = weak_kv.lock();
+            if (!kv)
+            {
+                m_hash.erase(k);
+                return {};
+            }
+            evict_whatever(true);
             m_list.enqueue(kv);
             return { kv, &kv->second };
         }
@@ -85,7 +91,7 @@ private:
         value_type temp;
         if (m_list.try_dequeue(temp) && either_map)
         {
-            m_hash.insert(temp->first, weak_value_type{});
+            m_hash.erase(temp->first);
         }
     }
 };
