@@ -5,6 +5,7 @@
 #include <list>
 #include <vector>
 #include <atomic>
+#include <exception>
 #include <shared_mutex>
 #undef BLOCK_SIZE
 #include "concurrentqueue/concurrentqueue.h"
@@ -12,24 +13,45 @@
 namespace nbtlru
 {
     
-template<typename T, ::std::size_t chunk_size>
+template<typename T, ::std::size_t ChunkSize, bool EnableFixedSize = false>
 class chunk_array
 {
 public:
     using value_type = T;
     using reference = value_type&;
 
-    const T* at(size_t index) const 
+    const T* at(size_t index) const noexcept
     {
-        auto lk = shr_lock();
-        if (index > unsafe_max_index())
-            return {};
-        return at_impl(index)->ele_ptr();       
+        if constexpr (EnableFixedSize)
+        {
+            auto lk = shr_lock();
+            if (index > unsafe_max_index())
+                return {};
+            return at_impl(index)->ele_ptr();       
+        }
+        else
+        {
+            if (index > unsafe_max_index())
+                return {};
+            return at_impl(index)->ele_ptr();       
+        }
     }
 
-    T* at(size_t index) 
+    T* at(size_t index) noexcept
     {
-        return const_cast<T*>(at(index));
+        if constexpr (EnableFixedSize)
+        {
+            auto lk = shr_lock();
+            if (index > unsafe_max_index())
+                return {};
+            return const_cast<T*>(at_impl(index)->ele_ptr());
+        }
+        else
+        {
+            if (index > unsafe_max_index())
+                return {};
+            return const_cast<T*>(at_impl(index)->ele_ptr());
+        }
     }
 
     template<typename... Args>
@@ -47,6 +69,17 @@ public:
 
     ::std::size_t size_approx() const noexcept { return m_new_index.load(::std::memory_order_relaxed); }
 
+    void reserve(size_t number_of_element)
+    {
+        while (expand() < number_of_element)
+            ;
+    }
+
+    chunk_array(size_t num_reserve)
+    {
+        reserve(num_reserve);
+    }
+
 private:
     auto uni_lock() const { return ::std::unique_lock{ m_expand_mutex }; }
     auto shr_lock() const { return ::std::shared_lock{ m_expand_mutex }; }
@@ -57,12 +90,12 @@ private:
         bool m_valid{};
 
         T*       ele_ptr()       noexcept { return reinterpret_cast<T*>(&m_buffer[0]); }
-        const T* ele_ptr() const noexcept { return reinterpret_cast<T*>(&m_buffer[0]); }
+        const T* ele_ptr() const noexcept { return reinterpret_cast<const T*>(&m_buffer[0]); }
     };
 
     struct alignas(4096) chunk
     {
-        value_cell m_cells[chunk_size];   
+        value_cell m_cells[ChunkSize];   
 
         value_cell* cell_at(size_t cell_id) noexcept { return &m_cells[cell_id]; }
         T* ele_at(size_t cell_id) noexcept { return cell_at(cell_id)->ele_ptr(); }
@@ -80,10 +113,23 @@ private:
         }
 
         const size_t new_index = m_new_index.fetch_add(1, ::std::memory_order_acquire);
-        while (new_index >= unsafe_max_index())
-            expand();           
+        if constexpr (!EnableFixedSize)
+        {
+            while (new_index >= unsafe_max_index())
+                expand();           
+        }
 
         auto result = const_cast<value_cell*>(at_impl(new_index));
+        if constexpr (EnableFixedSize)
+        {
+            if (!result)
+            {
+                ::std::cerr << "chunk_array: full and you've set EnableFixedSize = true, "
+                               "qsystem won't allocate any memory. " 
+                               "exiting..." << ::std::endl;
+                ::std::terminate();
+            }
+        }
         result->m_valid = true;
         return result->ele_ptr();
     }
@@ -97,19 +143,27 @@ private:
 
     const value_cell* at_impl(size_t index) const
     {
-        const size_t chunk_id = index / chunk_size;
-        const size_t cell_id = index % chunk_size;
+        const size_t chunk_id = index / ChunkSize;
+        const size_t cell_id = index % ChunkSize;
         if (m_chunks.size() <= chunk_id) return {};
         auto& chunk = m_chunks[chunk_id];
         if (!chunk) return {};
         return chunk->cell_at(cell_id);
     }
 
-    void expand()
+    size_t expand()
     {
-        auto lk = uni_lock();
-        m_chunks.push_back(::std::make_unique<chunk>());
-        m_max_index += chunk_size - 1;
+        if constexpr (EnableFixedSize)
+        {
+            auto lk = uni_lock();
+            m_chunks.push_back(::std::make_unique<chunk>());
+            return m_max_index += ChunkSize - 1;
+        }
+        else
+        {
+            m_chunks.push_back(::std::make_unique<chunk>());
+            return m_max_index += ChunkSize - 1;
+        }
     }
 
     size_t unsafe_max_index() const

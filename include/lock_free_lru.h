@@ -36,7 +36,7 @@ private:
     hashmap_type m_hash;
 
 public:
-    lock_free_lru(size_t capacity, double evict_thresh_ratio = 0.95)
+    lock_free_lru(size_t capacity, double evict_thresh_ratio = 1)
         : m_capacity{ capacity }, 
           m_evict_thresh{ static_cast<size_t>(m_capacity * evict_thresh_ratio) }
     {

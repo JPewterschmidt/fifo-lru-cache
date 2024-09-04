@@ -53,7 +53,7 @@ void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, wor
         | r::to<::std::vector>()
         );
     auto thrs = rv::iota(1ull, thrnum + 1) | r::to<::std::vector>();
-    for (size_t i{}; i < 10; ++i)
+    for (size_t i{}; i < 30; ++i)
     {
         ::std::random_device rd;
         ::std::mt19937 mt_gen(rd());
