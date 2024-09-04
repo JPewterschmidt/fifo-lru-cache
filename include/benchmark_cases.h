@@ -34,7 +34,7 @@ void benchmark_loop_body(auto& cache, key_t k, size_t& hits, size_t& misses)
     }
 }
 
-using worker_type = ::std::move_only_function<::std::chrono::nanoseconds(::std::latch&, size_t)>;
+using worker_type = ::std::function<::std::chrono::nanoseconds(::std::latch&, size_t)>;
 
 inline auto tic() { return ::std::chrono::high_resolution_clock::now(); }
 ::std::chrono::nanoseconds toc(auto tp) { return ::std::chrono::duration_cast<::std::chrono::nanoseconds>(tic() - tp); }

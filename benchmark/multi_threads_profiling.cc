@@ -63,7 +63,7 @@ void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, wor
             | rv::transform([&](auto&& thrnum) { 
                   return ::std::pair{ 
                       thrnum, 
-                      multi_thread_profiling_helper(thrnum, profile_name, ::std::move(worker)) 
+                      multi_thread_profiling_helper(thrnum, profile_name, worker) 
                   }; 
               })
             | rv::transform([](auto&& p) { 
