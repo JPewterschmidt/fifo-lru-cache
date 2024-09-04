@@ -9,26 +9,35 @@ if len(sys.argv) <= 3:
 
 csv1name = sys.argv[1]
 csv2name = sys.argv[2]
-output = sys.argv[3]
+csv3name = sys.argv[3]
+output = sys.argv[4]
 
 df1 = pd.read_csv(csv1name)
 df2 = pd.read_csv(csv2name)
+df3 = pd.read_csv(csv3name)
+
 df1 = pd.DataFrame(df1.mean())
 df2 = pd.DataFrame(df2.mean())
+df3 = pd.DataFrame(df3.mean())
+
 df1.columns = ['cost']
 df2.columns = ['cost']
+df3.columns = ['cost']
 
 df1_12only = df1.iloc[:12]
 df2_12only = df2.iloc[:12]
+df3_12only = df3.iloc[:12]
 
-def draw(df1, df2, postfix='.png'):
+def draw(df1, df2, df3, postfix='.png'):
     plt.figure(figsize=(10, 6))
     sns.set_theme()
     sns.scatterplot(data=df1, x=df1.index, y='cost', s=50)
-    sns.scatterplot(data=df2, x=df1.index, y='cost', s=50)
+    sns.scatterplot(data=df2, x=df2.index, y='cost', s=50)
+    sns.scatterplot(data=df3, x=df3.index, y='cost', s=50)
 
     sns.lineplot(data=df1, x=df1.index, y='cost')
-    sns.lineplot(data=df2, x=df1.index, y='cost')
+    sns.lineplot(data=df2, x=df2.index, y='cost')
+    sns.lineplot(data=df3, x=df3.index, y='cost')
 
     plt.xlabel("Number of Threads")
     plt.ylabel("Time Elapsed (ms)")
@@ -36,9 +45,9 @@ def draw(df1, df2, postfix='.png'):
     plt.savefig(output + postfix, dpi=300, bbox_inches='tight')
 
 
-draw(df1_12only, df2_12only)
+draw(df1_12only, df2_12only, df3_12only)
 
 if len(df1) <= 12:
     quit()
 
-draw(df1, df2, '2.png')
+draw(df1, df2, df3, '2.png')

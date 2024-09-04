@@ -97,6 +97,7 @@ target("benchmark")
                 "scripts/multi_threads_on_both_in_total.py", 
                 target:targetdir() .. "/multi_threads_on_naive_in_total.csv", 
                 target:targetdir() .. "/multi_threads_on_lockfree_in_total.csv", 
+                target:targetdir() .. "/multi_threads_on_sampling_in_total.csv", 
                 "experiment-report/pics/multi_threads_on_both_in_total"
             }
         )
