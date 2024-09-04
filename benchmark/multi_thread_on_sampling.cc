@@ -8,7 +8,7 @@ namespace nbtlru
 
 static sampling_lru<key_t, value_t> cache(benchmark_cache_size());
 
-t::nanoseconds lockfree_worker(::std::latch& l, size_t thrnum)
+t::nanoseconds sampling_worker(::std::latch& l, size_t thrnum)
 {
     l.arrive_and_wait();
     const auto tp = tic();

@@ -5,6 +5,7 @@
 #include <list>
 #include <vector>
 #include <atomic>
+#include <shared_mutex>
 #undef BLOCK_SIZE
 #include "concurrentqueue/concurrentqueue.h"
 
@@ -23,7 +24,12 @@ public:
         auto lk = shr_lock();
         if (index > unsafe_max_index())
             return {};
-        at_impl(index)->ele_ptr();       
+        return at_impl(index)->ele_ptr();       
+    }
+
+    T* at(size_t index) 
+    {
+        return const_cast<T*>(at(index));
     }
 
     template<typename... Args>
@@ -42,8 +48,8 @@ public:
     ::std::size_t size_approx() const noexcept { return m_new_index.load(::std::memory_order_relaxed); }
 
 private:
-    auto uni_lock() { return ::std::unique_lock{ m_expand_mutex }; }
-    auto shr_lock() { return ::std::shared_lock{ m_expand_mutex }; }
+    auto uni_lock() const { return ::std::unique_lock{ m_expand_mutex }; }
+    auto shr_lock() const { return ::std::shared_lock{ m_expand_mutex }; }
 
     struct value_cell
     {
@@ -58,26 +64,26 @@ private:
     {
         value_cell m_cells[chunk_size];   
 
-        value_cell*         cell_at(size_t cell_id)       { return &m_cells[cell_id]; }
-        const value_cell*   cell_at(size_t cell_id) const { return &m_cells[cell_id]; }
+        value_cell* cell_at(size_t cell_id) noexcept { return &m_cells[cell_id]; }
+        T* ele_at(size_t cell_id) noexcept { return cell_at(cell_id)->ele_ptr(); }
 
-        T*       ele_at(size_t cell_id)         { return cell_at(cell_id)->ele_ptr(); }
-        const T* ele_at(size_t cell_id) const   { return cell_at(cell_id)->ele_ptr(); }
+        const value_cell* cell_at(size_t cell_id) const noexcept { return &m_cells[cell_id]; }
+        const T* ele_at(size_t cell_id) const noexcept { return cell_at(cell_id)->ele_ptr(); }
     };
 
     T* allocate()
     {
-        value_cell* result{};
-        if (m_recycle.try_dequeue(result))
+        value_cell* result_cell{};
+        if (m_recycle.try_dequeue(result_cell))
         {
-            return result->ele_ptr();
+            return result_cell->ele_ptr();
         }
 
         const size_t new_index = m_new_index.fetch_add(1, ::std::memory_order_acquire);
         while (new_index >= unsafe_max_index())
             expand();           
 
-        auto result = at_impl(new_index);
+        auto result = const_cast<value_cell*>(at_impl(new_index));
         result->m_valid = true;
         return result->ele_ptr();
     }
@@ -89,7 +95,7 @@ private:
         m_recycle.enqueue(cell);       
     }
 
-    value_cell* at_impl(size_t index)
+    const value_cell* at_impl(size_t index) const
     {
         const size_t chunk_id = index / chunk_size;
         const size_t cell_id = index % chunk_size;

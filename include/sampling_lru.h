@@ -10,6 +10,7 @@
 #include <algorithm>
 #include "cuckoohash_map.hh"
 #include "chunk_array.h"
+#include "hash.h"
 
 
 namespace nbtlru
@@ -42,6 +43,7 @@ private:
         size_t ref() noexcept { return m_ref_count.fetch_add(1, ::std::memory_order_relaxed); }
         size_t unref() noexcept { return m_ref_count.fetch_sub(1, ::std::memory_order_acq_rel); }
         bool refered() const noexcept { return m_ref_count.load(::std::memory_order_acq_rel); }
+        bool is_sampling() const noexcept { return m_being_sampled.test(::std::memory_order_acq_rel); }
     };
 
     class element_handler
@@ -56,17 +58,35 @@ private:
         }
 
         ~element_handler() noexcept { reset(); }
+
         element_handler(element_handler&& other) noexcept 
             : m_ele{ ::std::exchange(other.m_ele, nullptr) },
               m_parent{ ::std::exchange(other.m_parent, nullptr) }
         {
         }
 
-        element_handler& operator(element_handler&& other) noexcept 
+        element_handler& operator=(element_handler&& other) noexcept 
         {
             reset();
             m_ele = ::std::exchange(other.m_ele, nullptr);
-            m_parent = ::std::exchange(other.m_ele, nullptr);
+            m_parent = ::std::exchange(other.m_parent, nullptr);
+            return *this;
+        }
+
+        element_handler(const element_handler& other) noexcept 
+            : m_ele{ other.m_ele },
+              m_parent{ other.m_parent }
+        {
+            if (m_ele) m_ele->ref();
+        }
+
+        element_handler& operator=(const element_handler& other) noexcept 
+        {
+            reset();
+            m_ele = other.m_ele;
+            m_parent = other.m_parent;
+            m_ele->ref();
+            return *this;
         }
 
         void reset() noexcept 
@@ -83,28 +103,38 @@ private:
 
         const MappedType* operator ->() const noexcept { return &m_ele->m_mapped; }
         const KeyType& key() const noexcept { return m_ele->m_key; }
-        ::std::uint_fast32_t last_acess_tick() const noexcept { return m_access_tick.load(::std::memory_order_acq_rel); }
+        ::std::uint_fast32_t last_access_tick() const noexcept { return m_ele->m_access_tick.load(::std::memory_order_acq_rel); }
 
         operator bool() const noexcept { return m_ele == nullptr; }
 
     private:
         friend class sampling_lru;
-        void update_access_tick(::std::uint_fast32_t val) noexcept { m_access_tick.store(val, ::std::memory_order_acquire); }
+        void update_access_tick(::std::uint_fast32_t val) noexcept { m_ele->m_access_tick.store(val, ::std::memory_order_acquire); }
+        bool is_sampling() const noexcept { return m_ele->is_sampling(); }
+        lru_element* ele() noexcept { return m_ele; }
+        const lru_element* ele() const noexcept { return m_ele; }
         
     private:
         lru_element* m_ele{};
         sampling_lru* m_parent{};
-    }
+    };
 
 public:
+    sampling_lru(size_t capacity, double evict_thresh_ratio = 0.9)
+        : m_capacity{ capacity }, 
+          m_evict_thresh{ static_cast<size_t>(m_capacity * evict_thresh_ratio) }
+    {
+        if (m_evict_thresh > m_capacity) m_evict_thresh = m_capacity;
+    }
+
     element_handler get(const KeyType& k)
     {
         element_handler tkv{};
-        if (!m_hash.find(k, tkv) || !tkv || tkv->m_being_sampled.test(::std::memory_order_acq_rel))
+        if (!m_hash.find(k, tkv) || !tkv || tkv.is_sampling())
         {
             return {};
         }
-        tkv->update_access_tick(step_forward());
+        tkv.update_access_tick(step_forward());
         return tkv;
     }
 
@@ -112,15 +142,22 @@ public:
         requires (::std::constructible_from<MappedType, Args...>)
     element_handler put(const KeyType& k, Args&&... args)
     {
-        T* ptr = m_storage.make_element(step_forward(), k, ::std::forward<Args>(args)...);
+        auto* ptr = m_storage.make_element(step_forward(), k, ::std::forward<Args>(args)...);
         assert(!ptr);
         evict_if_needed();
-        m_hash.insert(k, ptr);
+        element_handler result{ ptr, this };
+        m_hash.insert(k, result);
+        return result;
     }
 
     ::std::size_t size_approx() const noexcept
     {
         return m_size.load(::std::memory_order_relaxed);
+    }
+
+    ::std::size_t evict_thresh() const noexcept
+    {
+        return m_evict_thresh;
     }
     
 private:
@@ -128,29 +165,29 @@ private:
     ::std::vector<element_handler> sample(size_t n)
     {
         const auto now = step_forward();
-        ::std::vector<T*> result(5);
+        ::std::vector<element_handler> result(5);
         size_t max = m_storage.size_approx() - 1;
         ::std::mt19937_64 rng(::std::random_device{}());
-        uniform_int_distribution dist(0, max);
+        ::std::uniform_int_distribution<size_t> dist(0, max);
 
         const auto sz = size_approx();
-        n = n < sz ?q n : sz;
+        n = n < sz ? n : sz;
         for (size_t i{}; i < n; ++i)
         {
-            T* ptr{};
+            lru_element* ptr{};
             while (!(ptr = m_storage.at(dist(rng))))
                 ;
 
             if (ptr->m_being_sampled.test_and_set(::std::memory_order_acquire))
                 continue;
 
-            result.emplace_back(ptr);
+            result.emplace_back(ptr, this);
         }
         
         ::std::ranges::sort(result, 
             [now](const element_handler& lhs, const element_handler& rhs) {
-                return ((now - lhs.last_acess_tick()) % ::std::numeric_limits<decltype(now)>::max())
-                     > ((now - rhs.last_acess_tick()) % ::std::numeric_limits<decltype(now)>::max());
+                return ((now - lhs.last_access_tick()) % ::std::numeric_limits<decltype(now)>::max())
+                     > ((now - rhs.last_access_tick()) % ::std::numeric_limits<decltype(now)>::max());
             });
         return result;
     }
@@ -175,6 +212,9 @@ private:
     }
 
 private:
+    ::std::size_t m_capacity{};
+    ::std::size_t m_evict_thresh{};
+
     mutable ::std::atomic_uint_fast32_t m_current_tick{};
     ::std::atomic_size_t m_size{};
     chunk_array<lru_element, 146> m_storage;

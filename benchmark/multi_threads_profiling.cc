@@ -17,7 +17,10 @@ namespace r = ::std::ranges;
 namespace rv = r::views;
 namespace t = ::std::chrono;
 
-t::nanoseconds multi_thread_profiling_helper(size_t thrnum, string_view profile_name, worker_type worker)
+namespace nbtlru
+{
+
+t::nanoseconds multi_thread_profiling_helper(size_t thrnum, ::std::string_view profile_name, worker_type worker)
 {
     ::std::latch l{ thrnum };
 
@@ -39,7 +42,7 @@ t::nanoseconds multi_thread_profiling_helper(size_t thrnum, string_view profile_
 
 void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, worker_type worker)
 {
-    ::std::string_stream ss;
+    ::std::stringstream ss;
     ss << "multi_threads_on_" << profile_name <<  "_in_total.csv";
     ::std::string file_name = ss.str();
 
@@ -57,8 +60,18 @@ void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, wor
         r::shuffle(thrs, mt_gen);
         
         auto result_pair_rows = thrs
-            | rv::transform([](auto&& thrnum)   { return ::std::pair{ thrnum,   multi_thread_profiling_helper(thrnum, ::std::move(worker)) }; })
-            | rv::transform([](auto&& p)        { return ::std::pair{ p.first,  ::std::to_string(t::duration_cast<t::milliseconds>(p.second).count()) }; })
+            | rv::transform([&](auto&& thrnum) { 
+                  return ::std::pair{ 
+                      thrnum, 
+                      multi_thread_profiling_helper(thrnum, profile_name, ::std::move(worker)) 
+                  }; 
+              })
+            | rv::transform([](auto&& p) { 
+                  return ::std::pair{ 
+                      p.first,  
+                      ::std::to_string(t::duration_cast<t::milliseconds>(p.second).count()) 
+                  }; 
+              })
             | r::to<::std::vector>()
             ;
         r::sort(result_pair_rows, [](auto&& lhs, auto&& rhs){ return lhs.first < rhs.first; });
@@ -66,3 +79,5 @@ void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, wor
         ::std::cout << "round " << i << " complete." << ::std::endl;
     }
 }
+
+} // namespace nbtlru
