@@ -5,7 +5,8 @@ add_rules(
 
 add_requires(
     "benchmark", "gtest", "csv2",
-    "concurrentqueue"
+    "concurrentqueue", 
+    "atomic_queue"
 )
 
 set_languages("c++23", "c17")
@@ -27,6 +28,7 @@ add_includedirs("libcuckoo/libcuckoo")
 target("nbtlru")
     set_kind("headeronly")
     add_packages("concurrentqueue");
+    add_packages("atomic_queue");
     set_warnings("all", "error")
     add_includedirs(
         "include", 
@@ -88,6 +90,14 @@ target("benchmark")
                 "scripts/multi_threads_on_naive_in_total.py", 
                 target:targetdir() .. "/multi_threads_on_lockfree_in_total.csv", 
                 "experiment-report/pics/multi_threads_on_lockfree_in_total"
+            }
+        )
+        os.execv(
+            "python", { 
+                "scripts/multi_threads_on_both_in_total.py", 
+                target:targetdir() .. "/multi_threads_on_naive_in_total.csv", 
+                target:targetdir() .. "/multi_threads_on_lockfree_in_total.csv", 
+                "experiment-report/pics/multi_threads_on_both_in_total"
             }
         )
         

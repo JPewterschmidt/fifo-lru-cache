@@ -69,7 +69,7 @@ void multi_threads_on_naive_in_total(size_t thrnum)
         | r::to<::std::vector>()
         );
     auto thrs = rv::iota(1ull, thrnum + 1) | r::to<::std::vector>();
-    for (size_t i{}; i < 30; ++i)
+    for (size_t i{}; i < 10; ++i)
     {
         ::std::random_device rd;
         ::std::mt19937 mt_gen(rd());
