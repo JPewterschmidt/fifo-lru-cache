@@ -217,7 +217,7 @@ private:
 
     mutable ::std::atomic_uint_fast32_t m_current_tick{};
     ::std::atomic_size_t m_size{};
-    chunk_array<lru_element, 146> m_storage;
+    chunk_array<lru_element, 4096 / (sizeof(lru_element) + sizeof(bool))> m_storage;
     libcuckoo::cuckoohash_map<KeyType, element_handler, Hash, KeyEq> m_hash;
 };
 
