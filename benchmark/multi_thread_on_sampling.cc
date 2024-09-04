@@ -1,12 +1,12 @@
 #include "benchmark_workers.h"
-#include "lock_free_lru.h"
+#include "sampling_lru.h"
 
 namespace t = ::std::chrono;
 
 namespace nbtlru
 {
 
-static lock_free_lru<key_t, value_t> cache(benchmark_cache_size());
+static sampling_lru<key_t, value_t> cache(benchmark_cache_size());
 
 t::nanoseconds lockfree_worker(::std::latch& l, size_t thrnum)
 {

@@ -2,6 +2,11 @@
 #define NBTLRU_BENCHMARK_CASES_H
 
 #include <cstddef>
+#include <functional>
+#include <chrono>
+#include <latch>
+#include <string>
+#include <string_view>
 
 namespace nbtlru
 {
@@ -29,16 +34,23 @@ void benchmark_loop_body(auto& cache, key_t k, size_t& hits, size_t& misses)
     }
 }
 
+using worker_type = ::std::move_only_function<::std::chrono::nanoseconds(::std::latch&, size_t)>;
+
+
 inline auto tic() { return ::std::chrono::high_resolution_clock::now(); }
 ::std::chrono::nanoseconds toc(auto tp) { return ::std::chrono::duration_cast<::std::chrono::nanoseconds>(tic() - tp); }
 
 void different_dist_on_naive();
+void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, worker_type worker);
+
+
+
+
+
 
 void multi_threads_on_naive_in_total(size_t thrnum = 12);
-::std::chrono::nanoseconds multi_threads_on_naive(size_t thrnum = 12);
-
 void multi_threads_on_lockfree_in_total(size_t thrnum = 12);
-::std::chrono::nanoseconds multi_threads_on_lockfree(size_t thrnum = 12);
+void multi_threads_on_sampling_in_total(size_t thrnum = 12);
 
 } // namespace nbtlru
 
