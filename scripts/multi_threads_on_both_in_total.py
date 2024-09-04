@@ -21,28 +21,24 @@ df2.columns = ['cost']
 df1_12only = df1.iloc[:12]
 df2_12only = df2.iloc[:12]
 
-plt.figure(figsize=(10, 6))
-sns.set_theme()
+def draw(df1, df2, postfix='.png'):
+    plt.figure(figsize=(10, 6))
+    sns.set_theme()
+    sns.scatterplot(data=df1, x=df1.index, y='cost', s=50)
+    sns.scatterplot(data=df2, x=df1.index, y='cost', s=50)
 
-sns.scatterplot(data=df1_12only, x=df1.index, y='cost', s=50)
-sns.scatterplot(data=df2_12only, x=df1.index, y='cost', s=50)
+    sns.lineplot(data=df1, x=df1.index, y='cost')
+    sns.lineplot(data=df2, x=df1.index, y='cost')
 
-plt.xlabel("Number of Threads")
-plt.ylabel("Time Elapsed (ms)")
-plt.xticks(range(1, len(df1) + 1))
-plt.savefig(output + '.png', dpi=300, bbox_inches='tight')
+    plt.xlabel("Number of Threads")
+    plt.ylabel("Time Elapsed (ms)")
+    plt.xticks(range(1, len(df1) + 1))
+    plt.savefig(output + postfix, dpi=300, bbox_inches='tight')
+
+
+draw(df1_12only, df2_12only)
 
 if len(df1) <= 12:
     quit()
 
-
-plt.figure(figsize=(10, 6))
-sns.set_theme()
-
-sns.scatterplot(data=df1, x=df1.index, y='cost', s=50)
-sns.scatterplot(data=df2, x=df1.index, y='cost', s=50)
-
-plt.xlabel("Number of Threads")
-plt.ylabel("Time Elapsed (ms)")
-plt.xticks(range(1, len(df1) + 1))
-plt.savefig(output + '.png', dpi=300, bbox_inches='tight')
+draw(df1, df2, '2.png')

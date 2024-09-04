@@ -55,7 +55,7 @@ public:
                 m_hash.erase(k);
                 return {};
             }
-            evict_whatever(true);
+            evict_whatever();
             m_list.enqueue(kv);
             return { kv, &kv->second };
         }
@@ -70,6 +70,7 @@ public:
         m_hash.insert(k, kv);
         evict_if_needed();
         m_list.enqueue(kv);
+        m_size.fetch_add(1, ::std::memory_order_relaxed);
 
         return { kv, &kv->second };
     }
@@ -79,17 +80,17 @@ public:
     size_t evict_thresh() const noexcept { return m_evict_thresh; }
 
 private:
-    void evict_if_needed(bool either_map = true)
+    void evict_if_needed()
     {
         if (size_approx() < evict_thresh())
             return;
-        evict_whatever(either_map);
+        evict_whatever();
     }
 
-    void evict_whatever(bool either_map = false)
+    void evict_whatever()
     {
         value_type temp;
-        if (m_list.try_dequeue(temp) && either_map)
+        if (m_list.try_dequeue(temp))
         {
             m_hash.erase(temp->first);
         }
