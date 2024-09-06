@@ -76,8 +76,21 @@ public:
     }
 
     chunk_array(size_t num_reserve)
+        : m_num_reserve{ num_reserve }
     {
         reserve(num_reserve);
+    }
+
+    void reset()
+    {
+        m_chunks = {};
+        m_new_index.store(0, ::std::memory_order_relaxed);
+        m_max_index = {};
+        m_recycle = {};
+        if (m_num_reserve)
+        {
+            reserve(m_num_reserve);
+        }
     }
 
 private:
@@ -175,6 +188,7 @@ private:
     ::std::vector<::std::unique_ptr<chunk>> m_chunks;      
     ::std::atomic_size_t m_new_index{};
     ::std::size_t m_max_index{};
+    ::std::size_t m_num_reserve{};
     mutable ::std::shared_mutex m_expand_mutex;
     moodycamel::ConcurrentQueue<value_cell*> m_recycle;
 };
