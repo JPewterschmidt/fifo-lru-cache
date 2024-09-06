@@ -13,6 +13,7 @@ static rustex::mutex<naive_lru<key_t, value_t>> cache(benchmark_cache_size());
  
 ::std::pair<t::nanoseconds, double> naive_worker(::std::latch& l, size_t thrnum)
 {
+    cache.reset();
     l.arrive_and_wait();
     const auto tp = tic();
     [[maybe_unused]] size_t hits{}, misses{};

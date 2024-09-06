@@ -162,6 +162,14 @@ public:
     {
         return m_evict_thresh;
     }
+
+    void reset()
+    {
+        m_size.store(0, ::std::memory_order_relaxed);
+        m_hash = {};
+        m_storage = { m_capacity };
+        m_current_tick.store(0, ::std::memory_order_relaxed);
+    }
     
 private:
     // Return: Samples with age in descending order
@@ -216,11 +224,13 @@ private:
 
         auto victims = sample(5);
         assert(!victims.empty());
-        m_hash.erase(victims.front().key());
+
+        const KeyType& key = victims.front().key();
         for (auto& h : victims)
         {
             h.m_ele->m_being_sampled.clear(::std::memory_order_release);
         }
+        m_hash.erase(key);
     }
 
 private:

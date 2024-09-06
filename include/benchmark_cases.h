@@ -24,7 +24,7 @@ static inline consteval size_t benchmark_cache_size() noexcept { return   100'00
 //static inline consteval size_t benchmark_scale() noexcept { return 100; }
 //static inline consteval size_t benchmark_cache_size() noexcept { return   30; }
 
-inline void penalty(size_t n = 10)
+inline void penalty(size_t n = 100)
 {
     for (size_t i{}; i < n; ++i)
         ::_mm_pause();

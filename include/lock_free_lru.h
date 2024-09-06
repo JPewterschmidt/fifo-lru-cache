@@ -83,6 +83,13 @@ public:
     size_t capacity() const noexcept { return m_capacity; }
     size_t evict_thresh() const noexcept { return m_evict_thresh; }
 
+    void reset()
+    {
+        m_size.store(0, ::std::memory_order_relaxed);
+        m_queue = {};
+        m_hash = {};
+    }
+
 private:
     void evict_if_needed()
     {
