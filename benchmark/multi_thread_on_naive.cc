@@ -3,26 +3,30 @@
 #include "benchmark_workers.h"
 
 namespace t = ::std::chrono;
+namespace r = ::std::ranges;
+namespace rv = ::std::ranges::views;
 
 namespace nbtlru
 {
 
 static rustex::mutex<naive_lru<key_t, value_t>> cache(benchmark_cache_size());
  
-t::nanoseconds naive_worker(::std::latch& l, size_t thrnum)
+::std::pair<t::nanoseconds, double> naive_worker(::std::latch& l, size_t thrnum)
 {
     l.arrive_and_wait();
     const auto tp = tic();
     [[maybe_unused]] size_t hits{}, misses{};
 
-    for (auto k : gen<zipf, key_t>(benchmark_scale() / thrnum, true))
+    for (auto k : gen<zipf, key_t>(benchmark_scale(), true) | rv::take(benchmark_scale() / thrnum))
     {
         auto h = cache.lock_mut();
         auto& cache_ref = *h;
         benchmark_loop_body(cache_ref, k, hits, misses);
     }
 
-    return toc(tp);
+    auto time_elapsed = toc(tp);
+    
+    return { time_elapsed, (hits / double(hits + misses)) };
 }
 
 } // namespace nbtlru

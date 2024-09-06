@@ -11,6 +11,8 @@ csv1name = sys.argv[1]
 csv2name = sys.argv[2]
 csv3name = sys.argv[3]
 output = sys.argv[4]
+y_label = sys.argv[5]
+need_draw_throughput = int(sys.argv[6])
 
 df1 = pd.read_csv(csv1name)
 df2 = pd.read_csv(csv2name)
@@ -28,7 +30,7 @@ df1_12only = df1.iloc[:12]
 df2_12only = df2.iloc[:12]
 df3_12only = df3.iloc[:12]
 
-def draw(df1, df2, df3, postfix='.png'):
+def draw_latency(df1, df2, df3, postfix='_latency.png'):
     plt.figure(figsize=(10, 6))
     sns.set_theme()
     sns.scatterplot(data=df1, x=df1.index, y='cost', s=50)
@@ -40,14 +42,43 @@ def draw(df1, df2, df3, postfix='.png'):
     sns.lineplot(data=df3, x=df3.index, y='cost')
 
     plt.xlabel("Number of Threads")
-    plt.ylabel("Time Elapsed (ms)")
+    plt.ylabel(y_label)
     plt.xticks(range(1, len(df1) + 1))
     plt.savefig(output + postfix, dpi=300, bbox_inches='tight')
 
 
-draw(df1_12only, df2_12only, df3_12only)
+def draw_throughput(df1, df2, df3, postfix='_throughput.png'):
+    if (need_draw_throughput == 0):
+        return
+
+    df1 = (1000000 / df1) * 1000
+    df2 = (1000000 / df2) * 1000
+    df3 = (1000000 / df3) * 1000
+    df1.columns = ['throughput']
+    df2.columns = ['throughput']
+    df3.columns = ['throughput']
+
+    plt.figure(figsize=(10, 6))
+    sns.set_theme()
+    sns.scatterplot(data=df1, x=df1.index, y='throughput', s=50)
+    sns.scatterplot(data=df2, x=df2.index, y='throughput', s=50)
+    sns.scatterplot(data=df3, x=df3.index, y='throughput', s=50)
+
+    sns.lineplot(data=df1, x=df1.index, y='throughput')
+    sns.lineplot(data=df2, x=df2.index, y='throughput')
+    sns.lineplot(data=df3, x=df3.index, y='throughput')
+
+    plt.xlabel("Number of Threads")
+    plt.ylabel("Thoughput (MQPS)")
+    plt.xticks(range(1, len(df1) + 1))
+    plt.savefig(output + postfix, dpi=300, bbox_inches='tight')
+
+
+draw_latency(df1_12only, df2_12only, df3_12only)
+draw_throughput(df1_12only, df2_12only, df3_12only)
 
 if len(df1) <= 12:
     quit()
 
-draw(df1, df2, df3, '2.png')
+draw_latency(df1, df2, df3, '_timecost2.png')
+draw_throughput(df1, df2, df3, '_throughput2.png')

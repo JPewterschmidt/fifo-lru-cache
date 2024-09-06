@@ -11,8 +11,8 @@ output = sys.argv[2]
 df = pd.read_csv(csvname)
 
 fig, ax = plt.subplots(figsize=(4,3))
-ax.bar(df['dist'], df['hits'], color='red', label='Hits', alpha=0.9)
-ax.bar(df['dist'], df['misses'], bottom=df['hits'], color='blue', label='Misses', alpha=0.9)
+ax.bar(df['dist'], df['hits'], color='red', label='Hits', alpha=0.7)
+ax.bar(df['dist'], df['misses'], bottom=df['hits'], color='blue', label='Misses', alpha=0.7)
 ax.set_ylabel('Ratios')
 ax.set_title('Hits/Misses')
 ax.set_xticks(range(len(df['dist'])))

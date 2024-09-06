@@ -41,8 +41,8 @@ private:
 
         size_t ref() noexcept { return m_ref_count.fetch_add(1, ::std::memory_order_relaxed); }
         size_t unref() noexcept { return m_ref_count.fetch_sub(1, ::std::memory_order_acq_rel); }
-        bool refered() const noexcept { return m_ref_count.load(::std::memory_order_acq_rel); }
-        bool is_sampling() const noexcept { return m_being_sampled.test(::std::memory_order_acq_rel); }
+        bool refered() const noexcept { return m_ref_count.load(::std::memory_order_relaxed); }
+        bool is_sampling() const noexcept { return m_being_sampled.test(::std::memory_order_release); }
     };
 
     class element_handler
@@ -53,6 +53,7 @@ private:
         element_handler(lru_element* ele, sampling_lru* parent) noexcept
             : m_ele{ ele }, m_parent{ parent }
         {
+            assert(m_ele);
             m_ele->ref();   
         }
 
@@ -102,13 +103,13 @@ private:
 
         const MappedType* operator ->() const noexcept { return &m_ele->m_mapped; }
         const KeyType& key() const noexcept { return m_ele->m_key; }
-        ::std::uint_fast32_t lru_access_tick() const noexcept { return m_ele->m_lru_access_tick.load(::std::memory_order_acq_rel); }
+        ::std::uint_fast32_t lru_access_tick() const noexcept { return m_ele->m_lru_access_tick.load(::std::memory_order_relaxed); }
 
         operator bool() const noexcept { return m_ele != nullptr; }
 
     private:
         friend class sampling_lru;
-        void update_access_tick(::std::uint_fast32_t val) noexcept { m_ele->m_lru_access_tick.store(val, ::std::memory_order_acquire); }
+        void update_access_tick(::std::uint_fast32_t val) noexcept { m_ele->m_lru_access_tick.store(val, ::std::memory_order_relaxed); }
         bool is_sampling() const noexcept { return m_ele->is_sampling(); }
         lru_element* ele() noexcept { return m_ele; }
         const lru_element* ele() const noexcept { return m_ele; }
@@ -142,18 +143,19 @@ public:
         requires (::std::constructible_from<MappedType, Args...>)
     element_handler put(const KeyType& k, Args&&... args)
     {
-        auto* ptr = m_storage.make_element(lru_clock_step_forward(), k, ::std::forward<Args>(args)...);
-        assert(ptr);
         evict_if_needed();
-        element_handler result{ ptr, this };
+        element_handler result{ 
+            m_storage.make_element(lru_clock_step_forward(), k, ::std::forward<Args>(args)...),
+            this 
+        };
         m_hash.insert(k, result);
-        m_size.fetch_add(1, ::std::memory_order_acquire);
+        m_size.fetch_add(1, ::std::memory_order_relaxed);
         return result;
     }
 
     ::std::size_t size_approx() const noexcept
     {
-        return m_size.load(::std::memory_order_release);
+        return m_size.load(::std::memory_order_relaxed);
     }
 
     ::std::size_t evict_thresh() const noexcept
@@ -204,7 +206,7 @@ private:
 
     ::std::uint_fast32_t lru_clock_step_forward() const
     {
-        return m_current_tick.fetch_add(1, ::std::memory_order_acquire);
+        return m_current_tick.fetch_add(1, ::std::memory_order_relaxed);
     }
 
     void evict_if_needed()

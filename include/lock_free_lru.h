@@ -21,18 +21,23 @@ template<
 class lock_free_lru
 {
 public:
-    using kv_type = ::std::pair<KeyType, MappedType>;
-    using value_type = ::std::shared_ptr<kv_type>;
-    using weak_value_type = ::std::weak_ptr<kv_type>;
-    using list_type = moodycamel::ConcurrentQueue<value_type>;
-    using hashmap_type = libcuckoo::cuckoohash_map<KeyType, weak_value_type, Hash, KeyEq>;
+    using kv_type = ::std::pair<const KeyType, MappedType>;
+
+    using kv_sptr = ::std::shared_ptr<kv_type>;
+    using a_kv_sptr = ::std::atomic<kv_sptr>;
+    using sa_kv_sptr = ::std::shared_ptr<a_kv_sptr>;
+    using wa_kv_sptr = ::std::weak_ptr<a_kv_sptr>;
+
+    using queue_type = moodycamel::ConcurrentQueue<sa_kv_sptr>;
+    using hashmap_type = libcuckoo::cuckoohash_map<KeyType, wa_kv_sptr, Hash, KeyEq>;
     using result_type = ::std::shared_ptr<MappedType>;
 
 private:
     size_t m_capacity{};
     size_t m_evict_thresh{};
     ::std::atomic_size_t m_size{};
-    list_type m_list;
+
+    queue_type m_queue;
     hashmap_type m_hash;
 
 public:
@@ -45,34 +50,33 @@ public:
 
     result_type get(const KeyType& k)
     {
-        weak_value_type weak_kv;
-        value_type kv;
-        if (m_hash.find(k, weak_kv))
-        {
-            kv = weak_kv.lock();
-            if (!kv)
-            {
-                m_hash.erase(k);
-                return {};
-            }
-            evict_whatever();
-            m_list.enqueue(kv);
-            return { kv, &kv->second };
-        }
-        return {};
+        wa_kv_sptr wkv;
+        if (!m_hash.find(k, wkv)) return {};
+
+        sa_kv_sptr akv = wkv.lock();
+        if (!akv) return {};
+
+        kv_sptr kv = akv->load(::std::memory_order_acquire);
+        if (!kv) return {};
+
+        return { kv, &kv->second };
     }
  
     template<typename... Args>
         requires (::std::constructible_from<MappedType, Args...>)
     result_type put(const KeyType& k, Args&&... args)
     {
-        value_type kv = ::std::make_shared<kv_type>(k, MappedType(::std::forward<Args>(args)...));
-        m_hash.insert(k, kv);
+        auto [skvs, result] = make_node(k, ::std::forward<Args>(args)...);
+        wa_kv_sptr indexer{ skvs };
+
+        enqueue_new_node(::std::move(skvs));
+
         evict_if_needed();
-        m_list.enqueue(kv);
+        m_hash.insert(k, ::std::move(indexer));       
+
         m_size.fetch_add(1, ::std::memory_order_relaxed);
 
-        return { kv, &kv->second };
+        return result;
     }
 
     size_t size_approx() const noexcept { return m_size.load(::std::memory_order_relaxed); }
@@ -82,20 +86,48 @@ public:
 private:
     void evict_if_needed()
     {
-        if (size_approx() < evict_thresh())
-            return;
-        evict_whatever();
+        size_t retry = m_queue.size_approx() / 4;
+        while (size_approx() >= evict_thresh() && retry-- && !evict_whatever())
+            ;
     }
 
-    void evict_whatever()
+    bool evict_whatever()
     {
-        value_type temp;
-        if (m_list.try_dequeue(temp))
+        for (;;)
         {
-            m_hash.erase(temp->first);
+            sa_kv_sptr temp;
+            if (!m_queue.try_dequeue(temp))
+            {
+                return false;
+            }
+            kv_sptr victim = temp->exchange({}, ::std::memory_order_acq_rel);
+            if (victim)
+            {
+                m_hash.erase(victim->first);
+                m_size.fetch_sub(1, ::std::memory_order_relaxed);
+                return true;
+            }
         }
+        return {};
     }
-};
+
+    template<typename... Args>
+    ::std::pair<sa_kv_sptr, result_type> 
+    make_node(const KeyType& k, Args&&... args)
+    {
+        sa_kv_sptr result = ::std::make_shared<a_kv_sptr>();
+        assert(result);
+        kv_sptr kv = ::std::make_shared<kv_type>(k, MappedType(::std::forward<Args>(args)...));
+        result_type mapped(kv, &kv->second);
+        result->store(::std::move(kv), ::std::memory_order_relaxed);
+        return { result, mapped };
+    }
+
+    void enqueue_new_node(sa_kv_sptr ptr)
+    {
+        m_queue.enqueue(::std::move(ptr));
+    }
+}; 
 
 } // namespace nbtlru
 

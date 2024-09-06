@@ -1,155 +1,153 @@
 \maketitle
 
+\begin{abstract}
+    本实验分别实现了传统LRU淘汰算法在单线程以及单把锁的多线程版本，用于展示lock contention对性能的影响。
+    另外实现了基于无锁队列和智能指针的近似LRU算法、
+    类似于Redis方案的采样LRU算法。
+    本实验分别对不同线程数量、不同缓存容量以及不同缓存访问行为三个角度出发对上述三种缓存进行性能测试。
+    报告还介绍了本实验的三种缓存的部分实现细节以及其对性能的影响，最后还有本人对系统方向优化工作的感想。
+    
+    \textbf{关键字:}\quad LRU\quad 采样LRU\quad lock-free\quad 无锁队列\quad 并发编程
+\end{abstract}
+
 \section{实验报告}
 
-\subsection{技术选型}
+\subsection{实验平台}
 
-本次实验主要实现 FrozenHot\cite{qiu_frozenhot_2023} 的动态缓存部分。
-采用 LRU 置换算法，本时延中的该置换算法基于链表和hash表作为数据结构。
-hash 函数选用 MurmurHash3 \cite{SMHasher}
-
-本次考核文献\cite{qiu_frozenhot_2023}采用一个不可变无锁前端缓存，显著减少了缓存在并发管理方面的开销。
-文中讨论了 lock contention 对系统性能的负面影响。出于相同的目的，本实验采用lock-free链表。
-并在\cite{timothy_l_harris_pragmatic_2001}方案的基础上，增加\verb|splice|操作，
-以满足置换算法的需要。
-
-\subsection{并行实现细节}
-
-\subsubsection{目标分析}
-
-本实验实现的LRU缓存在单线程下，
-相比多线程下只由一把锁控制的版本，
-性能要好非常多\footnote{详见\ref{sec:one-mutex}} 。
-这主要是由随线程数量增长的管理成本造成的。
-其中就包括锁竞争，调度造成的上下文切换以及并发控制破坏了指令流水化。
-除了上述条件，对整个缓存对象上锁如此粗的管理粒度也是造成性能损失的重要原因。
-
-在利用链表的LRU缓存中，利用元素在链表中的位置关系表达元素 aging.
-每次缓存失配被淘汰掉的对象都会从链表尾选取；
-新进入缓存的对象或者被命中的对象都是插入到链表的头部。
-即在LRU算法中的双向链表的变动主要发生在头部和尾部。
-这么看，一把锁的管理范围就太广了：
-为了对操作头尾的并发访问进行控制，连同链表中间部分也不得被访问。
-因此，可以从锁粒度入手对系统进行优化。
-但是这种优化方案仍然需要缓存操作在所有核心之间可见，
-也总是会需要触发CPU缓存一致性算法，
-仍然有不可避免的随线程数增加而增加的并发管理成本。
-
-使用链表元素相对位置关系表达 aging 每次缓存操作都需要对元素位置进行调整，
-以确保缓存能够反映工作集变化。
-从多线程的角度上来看这每次访问都需要将变化传递到各核心，
-导致随线程数线性增长的写放大效应。
-Redis 采用的基于时间戳的方案就可以避免这个问题，
-通过计算当前时间和元素上次访问事件的差就可以表达两个元素的相对aging关系。
-这样成功命中的缓存访问就不再触发写入，这对CPU缓存是很友好的。
-但是元素在缓存中是乱续存放的，
-这种情况下要像链表方案精确找到真正的最近最久未使用元素需遍历整个缓存($O(n)$)。
-这种开销显然是不可接收的。因此Redis只是从已由元素中随机选取固定数量个对象，
-对他们的时间戳进行比对，然后从中选取对合适的淘汰$O(1)$。
-该算法通过多次随机抽样保证相对较热的对象不会被淘汰出缓存，保证了其有效性。
-
-Redis通过上述抽样LRU避免了写放大，
-但我认为其优秀的并发表现主要还是取决于其优秀的架构设计。
-总体而言 Redis利用key以及hash函数将数据分区，然后转发给各Redis节点处理，
-这些节点内部是单线程运行的，因此诸如 lock contention CPU缓存不友好等问题就可以避免了。
-这样的代码也更容易被编译器优化。
-
-
-\subsection{性能测试}
-
-\subsubsection{测试环境}
-
+本实验设计中开发、性能测试均在具备以下软硬件的系统上进行：
 \begin{itemize}
-    \item Intel Core I7 8750H 2.20GHz - 4.10GHz
-    \item 16GB RAM
-    \item \verb|GCC 13.3.1 20240614| 线程模型：Pthread
-    \item \verb|Linux 6.6.47-gentoo-dist x86_64 GNU/Linux|
+    \item Intel Core I7 8750H 2.20GHz $\sim$ 4.10GHz
+    \item 16GB DDR4 2667MHz
+    \item 192 KB L1d, 192 KB L1i, 1.5M L2, 9M L3
+    \item Linux 6.6.47-gentoo-dist x86\_64 GNU/Linux
+    \item gcc version 14.2.1 20240817 (Gentoo 14.2.1\_p20240817 p4)
 \end{itemize}
 
-\subsubsection{单线程LRU算法测试}
+实验采用xmake作为构建系统，
+使用的与本实验主题相关的开源软件在参考文献中列出。
+使用的其他软件请参见\verb|xmake.lua|文件。
+报告本身使用 \LaTeX 编写。编译运行实验代码、编译本报告可通过以下命令完成：
+\begin{verbatim}
+git submodule update --recursive --remote --init
+xmake f -m release; xmake -j 12; xmake r
+\end{verbatim}
 
-本小节主要描述对单线程下，无任何并发保护的简单 \verb|naive_lru| 的测试。
-用于展示测试数据服从四种不同分布时LRU Cache的性能。
+\subsection{实现细节}
 
-\begin{figure}
-    \centering
-    \includegraphics[width=0.5\textwidth]{pics/different_dist_on_naive.png}
-    \caption{测试数据在服从四种不同分布时LRU Cache的行为}
-    \label{fig:4-different-dists-lru-hit-ratio}
-\end{figure}
+所有实现中使用的Hash算法均为 MurmurHash3 中的x64版本，输出的是128位Hash值。
+本实验对其输出的128位Hash值做\verb|h[0] ^ (h[1] << 1)|处理以适应所使用的HashMap对象的要求。
+单线程版本的LRU缓存使用\verb|std::unordered_map|作为hash索引，
+其他两个无锁LRU缓存使用\verb|libcuckoo::cuckoohash_map|作为hash索引。
 
-由于语料词频率，网站访问频率等随机事件服从Zipfian分布，
-所以使用该分布生成的随机访问具有较好的局部性，符合缓存的应用场景。
-如图\ref{fig:4-different-dists-lru-hit-ratio}所示，
-当测试数据分布服从 Zipfian 分布时，缓存命中率远高于其他分布。
-单从这点上看，LRU比较适合作为缓存淘汰算法。
+\subsubsection{单线程LRU缓存}
 
-\subsubsection{一把锁保护的Na\"{i}ve缓存} \label{sec:one-mutex}
+单线程LRU缓存(后称N方案，Na\"{i}ve-LRU)实现了严格的LRU淘汰算法，
+直接使用STL \verb|std::list| 存储缓存数据.
+在hash表中存储各节点对应迭代器。节点的提升操作使用如下代码实现 
+\begin{verbatim}
+m_cache_list.splice(m_cache_list.begin(), m_cache_list, it->second);
+\end{verbatim}
+其中 \verb|it->second| 是指向该链表节点的迭代器，该操作将它指向的节点的位置关系移动到
+\verb|m_cache_list.begin()|之前，所包含的元素并不会发生移动或拷贝。
 
-\begin{figure}
-    \centering
-    \includegraphics[width=0.9\textwidth]{pics/multi_threads_on_naive_in_total.png}
-    \caption{随线程数增加(1-12)测试系统完成对$10^6$次缓存访问消耗的总时长}
-    \label{fig:multi-thread-naive-in-total}
-\end{figure}
+\subsubsection{无锁队列近似LRU}
 
-\begin{figure}
-    \centering
-    \includegraphics[width=0.9\textwidth]{pics/multi_threads_on_naive_in_total2.png}
-    \caption{随线程数增加(1-30)测试系统完成对$10^6$次缓存访问消耗的总时长}
-    \label{fig:multi-thread-naive-in-total-2}
-\end{figure}
+该算法使用一个无锁队列模拟LRU算法（后称Q方案Queue-LRU）。
+实现中，每个元素使用 \verb|std::shared_ptr| 管理，
+无锁队列保存表示元素的智能指针，另在hash表中保存对应指针的 \verb|std::weak_ptr|.
 
-本小节对只有一把锁进行并发管理的Na\"{i}ve缓存进行性能测试，
-主要观察线程数量对单锁结构管理开销的影响。
+节点的\textbf{提升操作}直接在队列头部插入指向该元素的智能指针，
+本文称这种操作为冗余提升\footnote{出于队列的限制，并不从队列中部移除原先的节点。}。
+以保证元素不被移出内存。
 
-测试内容：在不同的线程数量
-\footnote{分别限制线程数量在CPU核心（虚拟）数量内，以及超出CPU核心（虚拟）数量}下，
-系统完成对$10^6$次缓存访问所耗时间。
+为了减少冗余指针的内存浪费，
+在冗余提升之前必须“淘汰”一个元素，
+类似的，本文称该操作为滞后淘汰。
+其滞后性体现在该智能指针对象的副本有可能因为冗余提升仍留存在队列中，
+因此此时还不合适将被缓存内容移除出内存，也不应从hash索引中移除。
 
-测试方法：测试程序开\verb|-O3|编译;
-分别开$n = 1, 2, 3, \dots, 12$个线程并发地
-进行服从Zipfian分布的总共$10^6$次随机缓存访问，
-每个线程访问 $10^6 / n$ 次。上述过程重复执行5轮，最后取平均。
-每轮测试中$n$无序，但保证$n = 1, \dots, 12$均被取到。
+该算法通过智能指针的引用计数大致判断当前节点是否需要滞后淘汰，
+但这种做法不保证绝对的准确性。
+C++标准并未规定 \verb|use_count()| 函数内部使用何种原子操作内存序访问引用计数，
+因此不能对该调用反馈的引用计数值的准确性做任何假设，即它是不准确的。
+但因为热数据一定会被多次冗余提升，因此在队列中一定包含多个冗余的智能指针对象，
+因此基于 \verb|use_count()| 返回值的淘汰策略很难误伤真正的热数据。
 
-如图\ref{fig:multi-thread-naive-in-total} 所示，线程数量在CPU核心数（虚拟）内时，
-系统所消耗时间大致成正比。
-这大致可以反映当只有一把锁或者并发控制粒度比较粗时，
-管理开销会随参与共享同一对象的线程数量增加而增加。
-管理开销受到锁竞争，进程上下文切换以及访存等因素印象。
+应用代码中有可能会持有多份某对象的指针副本，
+这种罕见的情况造成的误判导致缓存不从hash索引中移除它，
+即使在队列中已不包含该指针副本。
+但换个角度来看，这种情况反应数据仍有部分热度。
+一段时间后所有应用代码释放对其的引用，
+在hash表中的 \verb|std::weak_ptr| 也不会阻止缓存内容被移出内存。
+这也反映了该淘汰算法的滞后性。
 
-\begin{figure}
-    \centering
-    \includegraphics[width=0.6\textwidth]{pics/multi_threads_on_naive_lockcost.png}
-    \caption{不同线程数下锁操作耗时}
-    \label{fig:multi-thread-naive-lockcost}
-\end{figure}
+\textbf{插入新节点}同样在对头插入新的指针，
+但与此同时也向内存载入了新的应用数据。
+为了严格控制应用数据的内存消耗，一定要淘汰掉一个真正的旧数据。
+可以通过重复执行上文算法来达到这一目的。
 
-图\ref{fig:multi-thread-naive-in-total}中当线程数为2时，实验的耗时表现是反直觉的。
-本人猜测是因为当线程数为2时，线程调度时出现的边缘情况，
-与锁无关。本实验为验证这一点，使用 \verb|perf| 测试了线程数
-$\allowbreak n = 1, 2, \dots, 14, 20, 30, 40, 50$
-时，\verb|lock| 和 \verb|unlock| 调用的耗时百分比。
-如图\ref{fig:multi-thread-naive-lockcost}所示，
-当$n=2$时，锁操作占比为$6.41\%$与相邻其他数据差异比较显著。
-因此，我认为上文中提到的反直觉表现，与锁无关。
-另外，图\ref{fig:multi-thread-naive-lockcost}中还可以观察到：
-当线程数$n \geq 12$时\footnote{灰线所示；Intel Core I7 8750H 有6个物理核心，12虚拟核心}
-锁操作开销占比不再有明显增长趋势，这是因为测试平台最多支持12个线程同时运行，
-最多只有12个线程竞争这把锁。
+\subsubsection{无锁采样近似LRU}
 
-另外，如图\ref{fig:multi-thread-naive-in-total-2}，
-当线程数量超过CPU的最大核心（虚拟）数后，由于频繁的线程调度和切换
-导致严重的管理耗时，经上文讨论可知：并发数量超过系统负载后，
-显著多出的管理耗时与\verb|lock|和\verb|unlock|逻辑无关。
+本实验复现了 Redis 中的采样LRU算法（后称S方案，Sampling-LRU），并为其添加了无锁并发支持。
 
-\subsection{使用 lock-free 技术实现的 缓存}
+为了支持随机采样，本实现实现了支持随机访问的对象池，
+该对象池以块(chunk)为单位管理内存\footnote{一个块通常为4096B}，不保证内存的连续性。
+采样算法随机给出的元素下标对应内存位置若未被分配，则返回一个空指针。
+下游系统 Deallocate 操作将会把当前对象所占内存放入一个无锁队列中回收，
+下次 Allocate 操作优先从回收队列中获取。
 
-基于上文对优化目标的分析，以及LRU算法需要可知
-该算法对链表操作仅包括两项：
-\begin{itemize}
-    \item 从链表中分离任意节点
-    \item 在链表头部插入节点
-\end{itemize}
+系统维护一个32位无符号整形变量作为LRU Clock，
+每次对缓存的访问都会使得Clock 原子地增1来表示时间的变化。
+每个缓存节点包含节点上次访问时刻，节点当前被采样状态等字段。
+其中节点上次访问时刻为一个32位无符号整数，用于表达元素之间的新旧关系。
+由于大致计算不同节点间的老旧关系并无需准确的数据，
+因此对该字段的更新和读取以及对LRU Clock的访问全部使用 \verb|relaxed| 内存序，
+以尽可能减少原子操作对性能的负面影响。
+
+节点的\textbf{提升操作}将会给其上次访问时刻赋最新LRU Clock值，
+相比前两种通过变化数据结构内部节点位置关系的方式，仅需要 \verb|relaxed|地原子修改一个内存位置。
+
+\textbf{插入新节点}需要从对象池中申请一块内存，在上面构造后赋予当前访问时间，并插入到hash表中。
+当空间不足时，执行采样算法选取若干待决定元素，从中选取距离本次访问最旧的对象淘汰。
+采样通过服从均匀分布的随机整数生成器生成若干在区间$\allowbreak (0, \mbox{Number of cached})$
+的整数作为采样下标，并通过该下标从对象池中获取该对象存储区域的指针。
+采样算法对当前时刻分别与两个待决定对象的上次访问时刻做差并对两者进行比较来区分出两者的新旧关系。
+通过对做差结果取模，可以消除溢出对数据带来的影响。
+
+\subsection{设计思路}
+
+Q 方案的设计初衷是用无锁链表和无锁hash表达到免除锁的目的。
+但是在实现过程中发现，双链表难以通过原子CAS操作在分离某节点时继续维持双链表关系，
+要达到像单线程双链表一样的效果需要DCAS或CAS2\footnote{能原子地修改两个内存位置的CAS操作}操作，
+但所有现代CPU均不支持该操作。
+
+因此Q方案放弃提升操作中先从链表中删除节点的步骤，转而采用上文中提出的冗余提升。
+核心思想就是相比N方案\textbf{宽松}淘汰算法中提升操作的要求。
+由于冗余提升的缘故，必然导致队列中存在冗余智能指针，因此淘汰操作被称为滞后淘汰。
+这种提升和淘汰方案在运行时速度表现良好，但内存用量则无法严格控制在给定的缓存大小内。
+
+S 方案是在Redis采样LRU算法的基础上，对其增加并发支持。
+该方案操作简洁，核心思想是\textbf{宽松}淘汰对象的选取准确性要求。
+该操作在Q方案和N方案中都是从队列或者链表尾部选取\textbf{最}久未使用的对象。
+维持这个待淘汰对象的\textbf{最}字需要链表以及队列的操作修改多个指针值来维持链表和队列的元素关系。
+优点是精准确定被淘汰对象，缺点是写放大效应相对较严重。
+而S方案仅需要原子地修改一个上次访问时刻即可，而且该原子操作对准确性要求不高，使用 \verb|relaxed|内存序即可。
+相比之下维持对象间新旧关系造成的写放大效应理论上要小于上两种算法。
+而且使用对象池管理内存更容易严格控制缓存的内存消耗。
+
+综上所述，除了N方案作为体现锁是多么邪恶的存在以外，另外两种方案均对LRU算法中某个步骤进行\textbf{宽松}。
+追求的不再是微观上的准确，而是宏观上的准确。这一变化为无锁并发编程减少了许多负担。
+
+\subsection{实验设计}
+
+本小节对上述LRU方案从命中率、吞吐量以及内存消耗三个维度进行性能测试。
+并分析三种方案中并发管理占总时间消耗的比例。
+
+\subsubsection{命中率}
+
+命中率测试数据分别使用 Zipfian 分布和 Uniform 分布来模拟局部性好和扫描缓存使用场景，
+观察不同线程数对命中率的影响。
+
+
+
 

@@ -127,7 +127,7 @@ private:
                 ::std::cerr << "chunk_array: full and you've set EnableFixedSize = true, "
                                "qsystem won't allocate any memory. " 
                                "exiting..." << ::std::endl;
-                ::std::terminate();
+                throw ::std::bad_alloc{};
             }
         }
         result->m_valid = true;
