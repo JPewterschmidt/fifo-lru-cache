@@ -11,10 +11,14 @@ namespace nbtlru
 {
 
 static sampling_lru<key_t, value_t> cache(benchmark_cache_size(), 0.99);
+static ::std::mutex reset_lock;
 
 ::std::pair<t::nanoseconds, double> sampling_worker(::std::latch& l, size_t thrnum)
 {
-    cache.reset();
+    {
+        ::std::lock_guard lk{ reset_lock };
+        cache.reset();
+    }
     l.arrive_and_wait();
     const auto tp = tic();
     [[maybe_unused]] size_t hits{}, misses{};

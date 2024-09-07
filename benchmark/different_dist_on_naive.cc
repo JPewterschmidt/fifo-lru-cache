@@ -23,13 +23,13 @@ template<template<typename> typename Dist>
 void different_dist_worker(auto& results_out, auto cache_initer)
 {
     size_t hits{}, misses{};
-    auto cache = cache_initer();
 
     ::std::vector<size_t> hitss;
     ::std::vector<size_t> missess;
 
     for (size_t i{}; i < 30; ++i)
     {
+        auto cache = cache_initer();
         for (auto k : gen<Dist, key_t>(benchmark_scale(), true))
             benchmark_loop_body(cache, k, hits, misses);
         hitss.push_back(hits);

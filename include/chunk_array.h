@@ -5,6 +5,8 @@
 #include <list>
 #include <vector>
 #include <atomic>
+#include <memory>
+#include <cassert>
 #include <exception>
 #include <shared_mutex>
 #undef BLOCK_SIZE
@@ -16,58 +18,83 @@ namespace nbtlru
 template<typename T, ::std::size_t ChunkSize, bool EnableFixedSize = false>
 class chunk_array
 {
+    struct value_cell
+    {
+        ::std::byte m_buffer[sizeof(T)];
+        ::std::atomic_bool m_valid{};
+        ::std::weak_ptr<value_cell> m_self;
+
+        T*       ele_ptr()       noexcept { return reinterpret_cast<T*>(&m_buffer[0]); }
+        const T* ele_ptr() const noexcept { return reinterpret_cast<const T*>(&m_buffer[0]); }
+        ::std::shared_ptr<value_cell> self_sptr() { return m_self.lock(); }
+        void make_valid() { m_valid.store(true, ::std::memory_order_release); }
+    };
+
 public:
+    using element_sptr = ::std::shared_ptr<T>;
+    using cell_sptr = ::std::shared_ptr<value_cell>;
     using value_type = T;
     using reference = value_type&;
 
-    const T* at(size_t index) const noexcept
+    element_sptr at(size_t index) const noexcept
     {
         if constexpr (EnableFixedSize)
+        {
+            if (index > unsafe_max_index())
+                return {};
+            value_cell* cell_rawp = at_impl(index);
+            if (!cell_rawp->m_valid.load(::std::memory_order_acquire))
+            {
+                return {};
+            }
+            auto h = cell_rawp->self_sptr().lock();
+            return { h, h->ele_ptr() };
+        }
+        else
         {
             auto lk = shr_lock();
             if (index > unsafe_max_index())
                 return {};
-            return at_impl(index)->ele_ptr();       
-        }
-        else
-        {
-            if (index > unsafe_max_index())
+            value_cell* cell_rawp = at_impl(index);
+            if (!cell_rawp->m_valid.load(::std::memory_order_acquire))
+            {
                 return {};
-            return at_impl(index)->ele_ptr();       
+            }
+            auto h = cell_rawp->self_sptr().lock();
+            return { h, h->ele_ptr() };
         }
     }
 
-    T* at(size_t index) noexcept
+    element_sptr at(size_t index) noexcept
     {
         if constexpr (EnableFixedSize)
+        {
+            if (index > unsafe_max_index())
+                return {};
+            value_cell* cell_rawp = const_cast<value_cell*>(at_impl(index));
+            if (!cell_rawp->m_valid.load(::std::memory_order_acquire))
+            {
+                return {};
+            }
+            auto h = cell_rawp->self_sptr();
+            return { h, h->ele_ptr() };
+        }
+        else
         {
             auto lk = shr_lock();
             if (index > unsafe_max_index())
                 return {};
-            return const_cast<T*>(at_impl(index)->ele_ptr());
-        }
-        else
-        {
-            if (index > unsafe_max_index())
+            value_cell* cell_rawp = const_cast<value_cell*>(at_impl(index));
+            if (!cell_rawp->m_valid.load(::std::memory_order_acquire))
+            {
                 return {};
-            return const_cast<T*>(at_impl(index)->ele_ptr());
+            }
+            auto h = cell_rawp->self_sptr().lock();
+            return { h, h->ele_ptr() };
         }
     }
 
-    template<typename... Args>
-    T* make_element(Args&&... args)
-    {
-        T* raw_space = allocate();
-        return new (raw_space) T(::std::forward<Args>(args)...);
-    }
-
-    void demake_element(T* value)
-    {
-        value->~T();
-        deallocate(value);
-    }
-
-    ::std::size_t size_approx() const noexcept { return m_new_index.load(::std::memory_order_relaxed); }
+    ::std::size_t size_approx() const noexcept { return m_new_index.load(::std::memory_order_release); }
 
     void reserve(size_t number_of_element)
     {
@@ -83,7 +110,7 @@ public:
 
     void reset()
     {
-        m_chunks = {};
+        m_chunks.clear();
         m_new_index.store(0, ::std::memory_order_relaxed);
         m_max_index = {};
         m_recycle = {};
@@ -97,14 +124,6 @@ private:
     auto uni_lock() const { return ::std::unique_lock{ m_expand_mutex }; }
     auto shr_lock() const { return ::std::shared_lock{ m_expand_mutex }; }
 
-    struct value_cell
-    {
-        ::std::byte m_buffer[sizeof(T)];
-        bool m_valid{};
-
-        T*       ele_ptr()       noexcept { return reinterpret_cast<T*>(&m_buffer[0]); }
-        const T* ele_ptr() const noexcept { return reinterpret_cast<const T*>(&m_buffer[0]); }
-    };
 
     struct alignas(4096) chunk
     {
@@ -117,15 +136,34 @@ private:
         const T* ele_at(size_t cell_id) const noexcept { return cell_at(cell_id)->ele_ptr(); }
     };
 
-    T* allocate()
+    struct smart_ptr_deleter
+    {
+    public:
+        smart_ptr_deleter(chunk_array* parent) noexcept
+            : m_parent{ parent }
+        {
+            assert(m_parent);
+        }
+
+        void operator()(value_cell* cell) noexcept
+        {
+            cell->ele_ptr()->~T();
+            m_parent->deallocate(cell);
+        }
+
+    private:
+        chunk_array* m_parent;
+    };
+
+    value_cell* allocate()
     {
         value_cell* result_cell{};
         if (m_recycle.try_dequeue(result_cell))
         {
-            return result_cell->ele_ptr();
+            return result_cell;
         }
 
-        const size_t new_index = m_new_index.fetch_add(1, ::std::memory_order_acquire);
+        const size_t new_index = m_new_index.fetch_add(1, ::std::memory_order_release);
         if constexpr (!EnableFixedSize)
         {
             while (new_index >= unsafe_max_index())
@@ -143,14 +181,12 @@ private:
                 throw ::std::bad_alloc{};
             }
         }
-        result->m_valid = true;
-        return result->ele_ptr();
+        return result;
     }
 
-    void deallocate(T* space)
+    void deallocate(value_cell* cell)
     {
-        value_cell* cell = reinterpret_cast<value_cell*>(space);
-        cell->m_valid = false;
+        cell->m_valid.store(false, ::std::memory_order_release);
         m_recycle.enqueue(cell);       
     }
 
@@ -168,12 +204,13 @@ private:
     {
         if constexpr (EnableFixedSize)
         {
-            auto lk = uni_lock();
+            //auto lk = uni_lock();
             m_chunks.push_back(::std::make_unique<chunk>());
             return m_max_index += ChunkSize - 1;
         }
         else
         {
+            auto lk = uni_lock();
             m_chunks.push_back(::std::make_unique<chunk>());
             return m_max_index += ChunkSize - 1;
         }
@@ -182,6 +219,17 @@ private:
     size_t unsafe_max_index() const
     {
         return m_max_index;
+    }
+
+public:
+    template<typename... Args>
+    cell_sptr make_element(Args&&... args)
+    {
+        value_cell* c = allocate();
+        new (c->ele_ptr()) T(::std::forward<Args>(args)...);
+        cell_sptr sptr{ c, smart_ptr_deleter{ this } };
+        sptr->m_self = sptr;
+        return sptr;
     }
 
 private:

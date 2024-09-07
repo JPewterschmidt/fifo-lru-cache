@@ -1,5 +1,6 @@
 #include "benchmark_workers.h"
 #include "lock_free_lru.h"
+#include <mutex>
 
 namespace t = ::std::chrono;
 namespace r = ::std::ranges;
@@ -9,10 +10,14 @@ namespace nbtlru
 {
 
 static lock_free_lru<key_t, value_t> cache(benchmark_cache_size());
+::std::mutex reset_lock;
 
 ::std::pair<t::nanoseconds, double> lockfree_worker(::std::latch& l, size_t thrnum)
 {
-    cache.reset();
+    {
+        ::std::lock_guard lk{ reset_lock };
+        cache.reset();
+    }
     l.arrive_and_wait();
     const auto tp = tic();
     [[maybe_unused]] size_t hits{}, misses{};

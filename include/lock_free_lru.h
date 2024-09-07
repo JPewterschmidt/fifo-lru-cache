@@ -87,7 +87,7 @@ public:
     {
         m_size.store(0, ::std::memory_order_relaxed);
         m_queue = {};
-        m_hash = {};
+        m_hash.clear();
     }
 
 private:

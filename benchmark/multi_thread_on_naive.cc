@@ -9,13 +9,14 @@ namespace rv = ::std::ranges::views;
 namespace nbtlru
 {
 
-static rustex::mutex<naive_lru<key_t, value_t>> cache(benchmark_cache_size());
+static naive_lru<key_t, value_t> cache(benchmark_cache_size());
+static ::std::mutex lock;
  
 ::std::pair<t::nanoseconds, double> naive_worker(::std::latch& l, size_t thrnum)
 {
     {
-        auto h = cache.lock_mut();
-        h->reset();
+        ::std::lock_guard lk{ lock };
+        cache.reset();
     }
     l.arrive_and_wait();
     const auto tp = tic();
@@ -23,9 +24,8 @@ static rustex::mutex<naive_lru<key_t, value_t>> cache(benchmark_cache_size());
 
     for (auto k : gen<zipf, key_t>(benchmark_scale(), true) | rv::take(benchmark_scale() / thrnum))
     {
-        auto h = cache.lock_mut();
-        auto& cache_ref = *h;
-        benchmark_loop_body(cache_ref, k, hits, misses);
+        ::std::lock_guard lk{ lock };
+        benchmark_loop_body(cache, k, hits, misses);
     }
 
     auto time_elapsed = toc(tp);

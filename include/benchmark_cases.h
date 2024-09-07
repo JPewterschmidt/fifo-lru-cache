@@ -21,10 +21,7 @@ using   key_t = uint64_t;
 static inline consteval size_t benchmark_scale() noexcept { return 1'000'000; }
 static inline consteval size_t benchmark_cache_size() noexcept { return   100'000; }
 
-//static inline consteval size_t benchmark_scale() noexcept { return 100; }
-//static inline consteval size_t benchmark_cache_size() noexcept { return   30; }
-
-inline void penalty(size_t n = 100)
+inline void penalty(size_t n = 50)
 {
     for (size_t i{}; i < n; ++i)
         ::_mm_pause();

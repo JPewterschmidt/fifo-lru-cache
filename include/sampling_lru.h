@@ -42,81 +42,12 @@ private:
         size_t ref() noexcept { return m_ref_count.fetch_add(1, ::std::memory_order_relaxed); }
         size_t unref() noexcept { return m_ref_count.fetch_sub(1, ::std::memory_order_acq_rel); }
         bool refered() const noexcept { return m_ref_count.load(::std::memory_order_relaxed); }
-        bool is_sampling() const noexcept { return m_being_sampled.test(::std::memory_order_release); }
-    };
-
-    class element_handler
-    {
-    public:
-        constexpr element_handler() noexcept = default;
-
-        element_handler(lru_element* ele, sampling_lru* parent) noexcept
-            : m_ele{ ele }, m_parent{ parent }
-        {
-            assert(m_ele);
-            m_ele->ref();   
-        }
-
-        ~element_handler() noexcept { reset(); }
-
-        element_handler(element_handler&& other) noexcept 
-            : m_ele{ ::std::exchange(other.m_ele, nullptr) },
-              m_parent{ ::std::exchange(other.m_parent, nullptr) }
-        {
-        }
-
-        element_handler& operator=(element_handler&& other) noexcept 
-        {
-            reset();
-            m_ele = ::std::exchange(other.m_ele, nullptr);
-            m_parent = ::std::exchange(other.m_parent, nullptr);
-            return *this;
-        }
-
-        element_handler(const element_handler& other) noexcept 
-            : m_ele{ other.m_ele },
-              m_parent{ other.m_parent }
-        {
-            if (m_ele) m_ele->ref();
-        }
-
-        element_handler& operator=(const element_handler& other) noexcept 
-        {
-            reset();
-            m_ele = other.m_ele;
-            m_parent = other.m_parent;
-            m_ele->ref();
-            return *this;
-        }
-
-        void reset() noexcept 
-        { 
-            if (m_ele) 
-            {
-                if (m_ele->unref() == 1)
-                {
-                    m_parent->demake(m_ele);
-                }
-                m_ele = nullptr;
-            }
-        }
-
-        const MappedType* operator ->() const noexcept { return &m_ele->m_mapped; }
-        const KeyType& key() const noexcept { return m_ele->m_key; }
-        ::std::uint_fast32_t lru_access_tick() const noexcept { return m_ele->m_lru_access_tick.load(::std::memory_order_relaxed); }
-
-        operator bool() const noexcept { return m_ele != nullptr; }
-
-    private:
-        friend class sampling_lru;
-        void update_access_tick(::std::uint_fast32_t val) noexcept { m_ele->m_lru_access_tick.store(val, ::std::memory_order_relaxed); }
-        bool is_sampling() const noexcept { return m_ele->is_sampling(); }
-        lru_element* ele() noexcept { return m_ele; }
-        const lru_element* ele() const noexcept { return m_ele; }
-        
-    private:
-        lru_element* m_ele{};
-        sampling_lru* m_parent{};
+        bool is_sampling() const noexcept { return m_being_sampled.test(::std::memory_order_acquire); }
+        bool test_and_set_being_sampled() noexcept { return m_being_sampled.test_and_set(::std::memory_order_acq_rel); }
+        void clear_being_sampled() noexcept { return m_being_sampled.clear(::std::memory_order_release); }
+        uint_fast32_t lru_access_tick() const noexcept { return m_lru_access_tick.load(::std::memory_order_relaxed); }
+        const KeyType& key() const noexcept { return m_key; }
+        void update_access_tick(uint_fast32_t tick) { m_lru_access_tick.store(tick, ::std::memory_order_relaxed); }
     };
 
 public:
@@ -128,29 +59,30 @@ public:
         if (m_evict_thresh > m_capacity) m_evict_thresh = m_capacity;
     }
 
-    element_handler get(const KeyType& k)
+    ::std::shared_ptr<MappedType> get(const KeyType& k)
     {
-        element_handler tkv{};
-        if (!m_hash.find(k, tkv) || !tkv || tkv.is_sampling())
+        ::std::shared_ptr<lru_element> tkv{};
+        if (m_hash.find(k, tkv))
         {
-            return {};
+            if (!tkv || tkv->is_sampling())
+                return {};
+            tkv->update_access_tick(lru_clock_step_forward());
+            return { tkv, &tkv->m_mapped };
         }
-        tkv.update_access_tick(lru_clock_step_forward());
-        return tkv;
+        return {};
     }
 
     template<typename... Args>
         requires (::std::constructible_from<MappedType, Args...>)
-    element_handler put(const KeyType& k, Args&&... args)
+    ::std::shared_ptr<MappedType> put(const KeyType& k, Args&&... args)
     {
         evict_if_needed();
-        element_handler result{ 
-            m_storage.make_element(lru_clock_step_forward(), k, ::std::forward<Args>(args)...),
-            this 
-        };
-        m_hash.insert(k, result);
+        auto handler = m_storage.make_element(lru_clock_step_forward(), k, ::std::forward<Args>(args)...);
+        ::std::shared_ptr<lru_element> lsptr{ handler, handler->ele_ptr() };
+        m_hash.insert(k, lsptr);
+        handler->make_valid();
         m_size.fetch_add(1, ::std::memory_order_relaxed);
-        return result;
+        return { lsptr, &lsptr->m_mapped };
     }
 
     ::std::size_t size_approx() const noexcept
@@ -166,17 +98,17 @@ public:
     void reset()
     {
         m_size.store(0, ::std::memory_order_relaxed);
-        m_hash = {};
-        m_storage = { m_capacity };
+        m_hash.clear();
+        m_storage.reset();
         m_current_tick.store(0, ::std::memory_order_relaxed);
     }
     
 private:
     // Return: Samples with age in descending order
-    ::std::vector<element_handler> sample(size_t n)
+    ::std::vector<::std::shared_ptr<lru_element>> sample(size_t n)
     {
         const auto now = lru_clock_step_forward();
-        ::std::vector<element_handler> result;
+        ::std::vector<::std::shared_ptr<lru_element>> result;
         size_t max = m_storage.size_approx() - 1;
         ::std::mt19937_64 rng(::std::random_device{}());
         ::std::uniform_int_distribution<size_t> dist(0, max);
@@ -184,32 +116,24 @@ private:
         const auto sz = size_approx();
         n = n < sz ? n : sz;
         size_t i{};
-        while (i < n)
+        do
         {
-            lru_element* ptr{};
-            while (!(ptr = m_storage.at(dist(rng))))
-                ;
-            
-            element_handler h{ ptr, this };
-            if (!h || h.m_ele->m_being_sampled.test_and_set(::std::memory_order_acquire))
+            auto h = m_storage.at(dist(rng));
+            if (!h || h->test_and_set_being_sampled())
                 continue;
 
             ++i;
             result.emplace_back(::std::move(h));
         }
+        while (i < n);
         
         ::std::ranges::sort(result, 
-            [now](const element_handler& lhs, const element_handler& rhs) {
+            [now](const ::std::shared_ptr<lru_element>& lhs, const ::std::shared_ptr<lru_element>& rhs) {
                 assert(lhs && rhs);
-                return ((now - lhs.lru_access_tick()) % ::std::numeric_limits<decltype(now)>::max())
-                     > ((now - rhs.lru_access_tick()) % ::std::numeric_limits<decltype(now)>::max());
+                return ((now - lhs->lru_access_tick()) % ::std::numeric_limits<decltype(now)>::max())
+                     > ((now - rhs->lru_access_tick()) % ::std::numeric_limits<decltype(now)>::max());
             });
         return result;
-    }
-
-    void demake(lru_element* ele)
-    {
-        m_storage.demake_element(ele);
     }
 
     ::std::uint_fast32_t lru_clock_step_forward() const
@@ -225,12 +149,12 @@ private:
         auto victims = sample(5);
         assert(!victims.empty());
 
-        const KeyType& key = victims.front().key();
+        const KeyType& key = victims.front()->key();
+        m_hash.erase(key);
         for (auto& h : victims)
         {
-            h.m_ele->m_being_sampled.clear(::std::memory_order_release);
+            h->clear_being_sampled();
         }
-        m_hash.erase(key);
     }
 
 private:
@@ -240,7 +164,7 @@ private:
     mutable ::std::atomic_uint_fast32_t m_current_tick{};
     ::std::atomic_size_t m_size{};
     chunk_array<lru_element, 4096 / (sizeof(lru_element) + sizeof(bool)), true> m_storage;
-    libcuckoo::cuckoohash_map<KeyType, element_handler, Hash, KeyEq> m_hash;
+    libcuckoo::cuckoohash_map<KeyType, ::std::shared_ptr<lru_element>, Hash, KeyEq> m_hash;
 };
 
 } // namesapce nbtlru
