@@ -51,10 +51,6 @@ inline auto tic() { return ::std::chrono::high_resolution_clock::now(); }
 void different_dist();
 void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, worker_type worker);
 
-void multi_threads_on_naive_in_total(size_t thrnum = 12);
-void multi_threads_on_lockfree_in_total(size_t thrnum = 12);
-void multi_threads_on_sampling_in_total(size_t thrnum = 12);
-
 } // namespace nbtlru
 
 #endif

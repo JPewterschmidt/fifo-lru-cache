@@ -31,7 +31,7 @@ df2_12only = df2.iloc[:12]
 df3_12only = df3.iloc[:12]
 
 def draw_latency(df1, df2, df3, postfix='_latency.png'):
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(5, 5))
     sns.set_theme()
     sns.scatterplot(data=df1, x=df1.index, y='cost', s=50)
     sns.scatterplot(data=df2, x=df2.index, y='cost', s=50)
@@ -58,7 +58,7 @@ def draw_throughput(df1, df2, df3, postfix='_throughput.png'):
     df2.columns = ['throughput']
     df3.columns = ['throughput']
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(5, 5))
     sns.set_theme()
     sns.scatterplot(data=df1, x=df1.index, y='throughput', s=50)
     sns.scatterplot(data=df2, x=df2.index, y='throughput', s=50)
