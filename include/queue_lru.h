@@ -5,6 +5,7 @@
 #include <utility>
 #include <cstddef>
 #include <unordered_map>
+#include <immintrin.h>
 #include "cuckoohash_map.hh"
 #include "hash.h"
 #undef BLOCK_SIZE
@@ -62,6 +63,7 @@ public:
 
             kv = akv->exchange({}, ::std::memory_order_acq_rel);
             if (kv) break;
+            ::_mm_pause();
         }
         promote(k, kv);       
 
