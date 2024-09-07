@@ -12,7 +12,7 @@ namespace nbtlru
 static naive_lru<key_t, value_t> cache(benchmark_cache_size());
 static ::std::mutex lock;
  
-::std::pair<t::nanoseconds, double> naive_worker(::std::latch& l, size_t thrnum)
+::std::pair<t::nanoseconds, double> naive_lru_profiling_worker(::std::latch& l, size_t thrnum)
 {
     {
         ::std::lock_guard lk{ lock };

@@ -6,7 +6,7 @@
 #include "csv2/writer.hpp"
 
 #include "naive_lru.h"
-#include "lock_free_lru.h"
+#include "queue_lru.h"
 #include "sampling_lru.h"
 #include "keys_generator.h"
 #include "distributions.h"
@@ -31,9 +31,10 @@ void different_dist_worker(auto& results_out, auto cache_initer)
     {
         auto cache = cache_initer();
         for (auto k : gen<Dist, key_t>(benchmark_scale(), true))
-            benchmark_loop_body(cache, k, hits, misses);
+            benchmark_loop_body(cache, k, hits, misses, false);
         hitss.push_back(hits);
         missess.push_back(misses);
+        ::std::cout << "iteration " << i << " complete." << ::std::endl;
     }
 
     hits = r::fold_left_first(hitss, ::std::plus{}).value() / 30.0;
@@ -49,17 +50,21 @@ void different_dist_worker(auto& results_out, auto cache_initer)
 
 static void different_dist_helper(const fs::path& output_filename, auto cache_initer)
 {
+    ::std::cout << "Start profiling and generating " << output_filename << ::std::endl;
     ::std::vector<::std::vector<::std::string>> results{ 
         { "dist", "hits", "misses", "hit-ratio" }, 
     };
+    
+    ::std::cout << "Zipfian" << ::std::endl;
     different_dist_worker<  zipf        >(results, cache_initer);
+
+    ::std::cout << "Uniform" << ::std::endl;
     different_dist_worker<  uniform     >(results, cache_initer);
-    //different_dist_worker<  normal      >(results, cache_initer);
-    //different_dist_worker<  lognormal   >(results, cache_initer);
 
     ::std::ofstream ofs{ output_filename };
     csv2::Writer<csv2::delimiter<','>> w(ofs);
     w.write_rows(results);
+    ::std::cout << "Complete profile and generate " << output_filename << ::std::endl;
 }
 
 void different_dist()
@@ -67,8 +72,8 @@ void different_dist()
     different_dist_helper("different_dist_on_naive.csv", []{ 
         return nbtlru::naive_lru<key_t, value_t>(benchmark_cache_size());
     });
-    different_dist_helper("different_dist_on_lockfree.csv", []{ 
-        return nbtlru::lock_free_lru<key_t, value_t>(benchmark_cache_size());
+    different_dist_helper("different_dist_on_queue.csv", []{ 
+        return nbtlru::queue_lru<key_t, value_t>(benchmark_cache_size());
     });
     different_dist_helper("different_dist_on_sampling.csv", []{ 
         return nbtlru::sampling_lru<key_t, value_t>(benchmark_cache_size());

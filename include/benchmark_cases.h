@@ -27,7 +27,7 @@ inline void penalty(size_t n = 50)
         ::_mm_pause();
 }
 
-void benchmark_loop_body(auto& cache, key_t k, size_t& hits, size_t& misses)
+void benchmark_loop_body(auto& cache, key_t k, size_t& hits, size_t& misses, bool enable_penalty = true)
 {
     using namespace ::std::chrono_literals;
     auto val_opt = cache.get(k);
@@ -39,7 +39,8 @@ void benchmark_loop_body(auto& cache, key_t k, size_t& hits, size_t& misses)
     {
         cache.put(k, value_t{});
         ++misses;
-        penalty();
+        if (enable_penalty)
+            penalty();
     }
 }
 

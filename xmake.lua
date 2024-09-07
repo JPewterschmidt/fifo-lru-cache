@@ -83,8 +83,8 @@ target("benchmark")
         os.execv(
             "python", { 
                 "scripts/different_dist.py", 
-                target:targetdir() .. "/different_dist_on_lockfree.csv", 
-                "experiment-report/pics/different_dist_on_lockfree.png"
+                target:targetdir() .. "/different_dist_on_queue.csv", 
+                "experiment-report/pics/different_dist_on_queue.png"
             }
         )
 
@@ -101,10 +101,10 @@ target("benchmark")
             "python", { 
                 "scripts/multi_threads_on_both_in_total.py", 
                 target:targetdir() .. "/multi_threads_on_naive_latency.csv", 
-                target:targetdir() .. "/multi_threads_on_lockfree_latency.csv", 
+                target:targetdir() .. "/multi_threads_on_queue_latency.csv", 
                 target:targetdir() .. "/multi_threads_on_sampling_latency.csv", 
                 "experiment-report/pics/multi_threads_on_both_latency", 
-                "Query Latency (ms)", 
+                "Time Elasped (ms)", 
                 "1"
             }
         )
@@ -113,7 +113,7 @@ target("benchmark")
             "python", { 
                 "scripts/multi_threads_on_both_in_total.py", 
                 target:targetdir() .. "/multi_threads_on_naive_hitratio.csv", 
-                target:targetdir() .. "/multi_threads_on_lockfree_hitratio.csv", 
+                target:targetdir() .. "/multi_threads_on_queue_hitratio.csv", 
                 target:targetdir() .. "/multi_threads_on_sampling_hitratio.csv", 
                 "experiment-report/pics/multi_threads_on_both_hitratio", 
                 "Hits Ratio", 

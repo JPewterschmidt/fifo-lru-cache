@@ -1,5 +1,5 @@
-#ifndef NBTLRU_LOCK_FREE_LRU_H
-#define NBTLRU_LOCK_FREE_LRU_H
+#ifndef NBTLRU_QUEUE_LRU_H
+#define NBTLRU_QUEUE_LRU_H
 
 #include <atomic>
 #include <utility>
@@ -18,7 +18,7 @@ template<
     typename MappedType, 
     typename Hash = murmur_hash_x64_128_xor_shift_to_64<KeyType>, 
     typename KeyEq = ::std::equal_to<KeyType>>
-class lock_free_lru
+class queue_lru 
 {
 public:
     using kv_type = ::std::pair<const KeyType, MappedType>;
@@ -29,7 +29,7 @@ public:
     using wa_kv_sptr = ::std::weak_ptr<a_kv_sptr>;
 
     using queue_type = moodycamel::ConcurrentQueue<sa_kv_sptr>;
-    using hashmap_type = libcuckoo::cuckoohash_map<KeyType, wa_kv_sptr, Hash, KeyEq>;
+    using hashmap_type = libcuckoo::cuckoohash_map<KeyType, sa_kv_sptr, Hash, KeyEq>;
     using result_type = ::std::shared_ptr<MappedType>;
 
 private:
@@ -41,7 +41,7 @@ private:
     hashmap_type m_hash;
 
 public:
-    lock_free_lru(size_t capacity, double evict_thresh_ratio = 1)
+    queue_lru(size_t capacity, double evict_thresh_ratio = 1)
         : m_capacity{ capacity }, 
           m_evict_thresh{ static_cast<size_t>(m_capacity * evict_thresh_ratio) }
     {
@@ -50,14 +50,20 @@ public:
 
     result_type get(const KeyType& k)
     {
-        wa_kv_sptr wkv;
-        if (!m_hash.find(k, wkv)) return {};
+        kv_sptr kv{};
+        for (;;)
+        {
+            sa_kv_sptr akv{};
+            
+            if (!m_hash.find(k, akv)) 
+                return {};
 
-        sa_kv_sptr akv = wkv.lock();
-        if (!akv) return {};
+            if (!akv) continue;
 
-        kv_sptr kv = akv->load(::std::memory_order_acquire);
-        if (!kv) return {};
+            kv = akv->exchange({}, ::std::memory_order_acq_rel);
+            if (kv) break;
+        }
+        promote(k, kv);       
 
         return { kv, &kv->second };
     }
@@ -66,13 +72,12 @@ public:
         requires (::std::constructible_from<MappedType, Args...>)
     result_type put(const KeyType& k, Args&&... args)
     {
-        auto [skvs, result] = make_node(k, ::std::forward<Args>(args)...);
-        wa_kv_sptr indexer{ skvs };
-
-        enqueue_new_node(::std::move(skvs));
+        auto [akv, result] = make_node(k, ::std::forward<Args>(args)...);
 
         evict_if_needed();
-        m_hash.insert(k, ::std::move(indexer));       
+        enqueue_new_node(akv);
+        assert(akv && akv->load());
+        m_hash.insert(k, akv);       
 
         m_size.fetch_add(1, ::std::memory_order_relaxed);
 
@@ -93,8 +98,7 @@ public:
 private:
     void evict_if_needed()
     {
-        size_t retry = m_queue.size_approx() / 4;
-        while (size_approx() >= evict_thresh() && retry-- && !evict_whatever())
+        while (size_approx() >= evict_thresh() && !evict_whatever())
             ;
     }
 
@@ -122,12 +126,22 @@ private:
     ::std::pair<sa_kv_sptr, result_type> 
     make_node(const KeyType& k, Args&&... args)
     {
+        kv_sptr kv = ::std::make_shared<kv_type>(k, MappedType(::std::forward<Args>(args)...));
         sa_kv_sptr result = ::std::make_shared<a_kv_sptr>();
         assert(result);
-        kv_sptr kv = ::std::make_shared<kv_type>(k, MappedType(::std::forward<Args>(args)...));
         result_type mapped(kv, &kv->second);
         result->store(::std::move(kv), ::std::memory_order_relaxed);
         return { result, mapped };
+    }
+
+    void promote(const KeyType& k, kv_sptr kv)
+    {
+        assert(kv);
+        sa_kv_sptr temp = ::std::make_shared<a_kv_sptr>();
+        temp->store(::std::move(kv), ::std::memory_order_relaxed);
+        assert(temp && temp->load());
+        enqueue_new_node(temp);
+        m_hash.insert(k, temp);
     }
 
     void enqueue_new_node(sa_kv_sptr ptr)

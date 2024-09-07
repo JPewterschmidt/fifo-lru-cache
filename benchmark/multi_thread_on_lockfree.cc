@@ -1,5 +1,5 @@
 #include "benchmark_workers.h"
-#include "lock_free_lru.h"
+#include "queue_lru.h"
 #include <mutex>
 
 namespace t = ::std::chrono;
@@ -9,10 +9,10 @@ namespace rv = ::std::ranges::views;
 namespace nbtlru
 {
 
-static lock_free_lru<key_t, value_t> cache(benchmark_cache_size());
+static queue_lru<key_t, value_t> cache(benchmark_cache_size());
 ::std::mutex reset_lock;
 
-::std::pair<t::nanoseconds, double> lockfree_worker(::std::latch& l, size_t thrnum)
+::std::pair<t::nanoseconds, double> queue_lru_profiling_worker(::std::latch& l, size_t thrnum)
 {
     {
         ::std::lock_guard lk{ reset_lock };
@@ -22,8 +22,10 @@ static lock_free_lru<key_t, value_t> cache(benchmark_cache_size());
     const auto tp = tic();
     [[maybe_unused]] size_t hits{}, misses{};
 
+    size_t iteration{};
     for (auto k : gen<zipf, key_t>(benchmark_scale(), true) | rv::take(benchmark_scale() / thrnum))
     {
+        ++iteration;
         benchmark_loop_body(cache, k, hits, misses);
     }
 

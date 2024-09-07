@@ -13,9 +13,9 @@
 namespace nbtlru
 {
 
-::std::pair<::std::chrono::nanoseconds, double> naive_worker(::std::latch&, size_t);
-::std::pair<::std::chrono::nanoseconds, double> lockfree_worker(::std::latch&, size_t);
-::std::pair<::std::chrono::nanoseconds, double> sampling_worker(::std::latch&, size_t);
+::std::pair<::std::chrono::nanoseconds, double> naive_lru_profiling_worker(::std::latch&, size_t);
+::std::pair<::std::chrono::nanoseconds, double> queue_lru_profiling_worker(::std::latch&, size_t);
+::std::pair<::std::chrono::nanoseconds, double> sampling_lru_profiling_worker(::std::latch&, size_t);
 
 } // namespace nbtlru
 

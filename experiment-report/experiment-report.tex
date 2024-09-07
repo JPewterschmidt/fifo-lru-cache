@@ -39,7 +39,7 @@ xmake f -m release; xmake -j 12; xmake r
 单线程版本的LRU缓存使用\verb|std::unordered_map|作为hash索引，
 其他两个无锁LRU缓存使用\verb|libcuckoo::cuckoohash_map|作为hash索引。
 
-\subsubsection{单线程LRU缓存}
+\subsubsection{单线程/单把锁LRU缓存}
 
 单线程LRU缓存(后称N方案，Na\"{i}ve-LRU)实现了严格的LRU淘汰算法，
 直接使用STL \verb|std::list| 存储缓存数据.
@@ -53,38 +53,45 @@ m_cache_list.splice(m_cache_list.begin(), m_cache_list, it->second);
 \subsubsection{无锁队列近似LRU}
 
 该算法使用一个无锁队列模拟LRU算法（后称Q方案Queue-LRU）。
-实现中，每个元素使用 \verb|std::shared_ptr| 管理，
-无锁队列保存表示元素的智能指针，另在hash表中保存对应指针的 \verb|std::weak_ptr|.
 
-节点的\textbf{提升操作}直接在队列头部插入指向该元素的智能指针，
-本文称这种操作为冗余提升\footnote{出于队列的限制，并不从队列中部移除原先的节点。}。
-以保证元素不被移出内存。
+LRU算法使用双链表是为了方便提升操作将节点从链表中任意位置分离，并重新插入链表头部。
+本文最初希望实现一个基于原子操作的无锁双链表。
+但在链表中部分离节点需要原子地修改两个指针，有工作提出使用CAS2操作实现这一功能。
+但CAS2并没有任何一款现代CPU支持。
 
-为了减少冗余指针的内存浪费，
-在冗余提升之前必须“淘汰”一个元素，
-类似的，本文称该操作为滞后淘汰。
-其滞后性体现在该智能指针对象的副本有可能因为冗余提升仍留存在队列中，
-因此此时还不合适将被缓存内容移除出内存，也不应从hash索引中移除。
+相比之下，单链表使用CAS操作即可维持其结构。但其只能向后遍历，
+不能获取其前驱节点，则只能$O(n)$地分离一个节点。
+有工作也提出在每个新插入的数据节点前搭配一个 dummy 节点，辅助实现$O(1)$分离操作。
+但是这种方案在LRU的应用场景中会造成大量 dummy node 滞留在链表中。
+且必须从头实现，不容易利用已有设施。
 
-该算法通过智能指针的引用计数大致判断当前节点是否需要滞后淘汰，
-但这种做法不保证绝对的准确性。
-C++标准并未规定 \verb|use_count()| 函数内部使用何种原子操作内存序访问引用计数，
-因此不能对该调用反馈的引用计数值的准确性做任何假设，即它是不准确的。
-但因为热数据一定会被多次冗余提升，因此在队列中一定包含多个冗余的智能指针对象，
-因此基于 \verb|use_count()| 返回值的淘汰策略很难误伤真正的热数据。
+\begin{figure}[b]
+    \centering
+    \includegraphics[width=0.6\textwidth]{pics/queue-lru-overall.drawio.png}
+    \caption{Queue-LRU 示意图}
+    \label{fig:queue-lru-overall}
+\end{figure}
 
-应用代码中有可能会持有多份某对象的指针副本，
-这种罕见的情况造成的误判导致缓存不从hash索引中移除它，
-即使在队列中已不包含该指针副本。
-但换个角度来看，这种情况反应数据仍有部分热度。
-一段时间后所有应用代码释放对其的引用，
-在hash表中的 \verb|std::weak_ptr| 也不会阻止缓存内容被移出内存。
-这也反映了该淘汰算法的滞后性。
+再三权衡之后，本文使用一个无锁队列来实现LRU算法:
+如图\ref{fig:queue-lru-overall}所示，
+在新插入的节点直接入队，出队的节点作为淘汰节点。
+以
+\verb|shared_ptr<atomic<shared_ptr<lru_element>>>|
+作为入队的元素类型，以
+\verb|weak_ptr<atomic<shared_ptr<lru_element>>>|
+作为hash索引对象的类型。
 
-\textbf{插入新节点}同样在对头插入新的指针，
-但与此同时也向内存载入了新的应用数据。
-为了严格控制应用数据的内存消耗，一定要淘汰掉一个真正的旧数据。
-可以通过重复执行上文算法来达到这一目的。
+\begin{figure}
+    \centering
+    \includegraphics[width=0.6\textwidth]{pics/queue-lru-promoted.drawio.png}
+    \caption{Queue-LRU 某节点提升后示意图}
+    \label{fig:queue-lru-promoted}
+\end{figure}
+
+如图\ref{fig:queue-lru-promoted}所示,
+访问某节点，首先索引到对应节点的弱指针，进而\verb|atomic<shared_ptr>|指针。
+执行\textbf{提升操作}则使用原子\verb|exchange|将\verb|shared_ptr<lru_element>|换出，
+重新插入队头，最后更新索引。
 
 \subsubsection{无锁采样近似LRU}
 
@@ -120,33 +127,45 @@ Q 方案的设计初衷是用无锁链表和无锁hash表达到免除锁的目�
 但是在实现过程中发现，双链表难以通过原子CAS操作在分离某节点时继续维持双链表关系，
 要达到像单线程双链表一样的效果需要DCAS或CAS2\footnote{能原子地修改两个内存位置的CAS操作}操作，
 但所有现代CPU均不支持该操作。
-
-因此Q方案放弃提升操作中先从链表中删除节点的步骤，转而采用上文中提出的冗余提升。
-核心思想就是相比N方案\textbf{宽松}淘汰算法中提升操作的要求。
-由于冗余提升的缘故，必然导致队列中存在冗余智能指针，因此淘汰操作被称为滞后淘汰。
-这种提升和淘汰方案在运行时速度表现良好，但内存用量则无法严格控制在给定的缓存大小内。
+因此Q方案转而使用无锁队列和原子对象智能指针的配合。相对双链表LRU，Q方案为了并发性能对内存使用进行了\textbf{宽松}。
+每次提升操作会遗留一个垃圾节点在队列中。
 
 S 方案是在Redis采样LRU算法的基础上，对其增加并发支持。
 该方案操作简洁，核心思想是\textbf{宽松}淘汰对象的选取准确性要求。
-该操作在Q方案和N方案中都是从队列或者链表尾部选取\textbf{最}久未使用的对象。
-维持这个待淘汰对象的\textbf{最}字需要链表以及队列的操作修改多个指针值来维持链表和队列的元素关系。
-优点是精准确定被淘汰对象，缺点是写放大效应相对较严重。
-而S方案仅需要原子地修改一个上次访问时刻即可，而且该原子操作对准确性要求不高，使用 \verb|relaxed|内存序即可。
+仅需要原子地修改一个上次访问时刻即可维护LRU信息，
+且该原子操作对准确性要求不高，使用 \verb|relaxed|内存序即可。
 相比之下维持对象间新旧关系造成的写放大效应理论上要小于上两种算法。
-而且使用对象池管理内存更容易严格控制缓存的内存消耗。
 
 综上所述，除了N方案作为体现锁是多么邪恶的存在以外，另外两种方案均对LRU算法中某个步骤进行\textbf{宽松}。
-追求的不再是微观上的准确，而是宏观上的准确。这一变化为无锁并发编程减少了许多负担。
+追求的不再是微观上的准确，而是宏观上的大概率的准确。这一变化为无锁并发编程减少了许多负担。
 
 \subsection{实验设计}
 
 本小节对上述LRU方案从命中率、吞吐量以及内存消耗三个维度进行性能测试。
 并分析三种方案中并发管理占总时间消耗的比例。
+其中命中率、吞吐量和内存消耗数据为同一次实验测得，
+便于后续讨论各种特征的相关性。
+未特别注明，默认缓存大小为总测试大小的1/10.
+
+\begin{figure}
+    \subfigure[Na\"{i}ve-LRU Hit Ratio]{ 
+        \includegraphics[width=0.3\textwidth]{pics/different_dist_on_naive.png}
+    }
+    \subfigure[Queue-lru Hit Ratio]{ 
+        \includegraphics[width=0.3\textwidth]{pics/different_dist_on_queue.png}
+    }
+    \subfigure[Sampling-lru Hit Ratio]{ 
+        \includegraphics[width=0.3\textwidth]{pics/different_dist_on_sampling.png}
+    }
+    \caption{各LRU实现单线程下对两种访问类型模拟的命中率测试示意图}
+    \label{fig:dist_on_3_1thread}
+\end{figure}
 
 \subsubsection{命中率}
 
-命中率测试数据分别使用 Zipfian 分布和 Uniform 分布来模拟局部性好和扫描缓存使用场景，
-观察不同线程数对命中率的影响。
+首先对三个缓存实现在单线程下，分别用 Zipfian 分布以及 Uniform 分布生成测试数据对它们进行测试。
+测试结果如图\ref{fig:dist_on_3_1thread}所示，三者命中率大致相同.
+
 
 
 
