@@ -70,6 +70,10 @@ target("benchmark")
         "concurrentqueue"
     )
     after_run(function (target)
+        if is_mode("debug") then
+            return
+        end
+
         print("drawing pictures ... ")
 
         os.execv(

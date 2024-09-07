@@ -77,7 +77,7 @@ public:
         evict_if_needed();
         enqueue_new_node(akv);
         assert(akv && akv->load());
-        m_hash.insert(k, akv);       
+        m_hash.upsert(k, [&](auto& entry) { entry = akv; }, akv);       
 
         m_size.fetch_add(1, ::std::memory_order_relaxed);
 
@@ -139,9 +139,9 @@ private:
         assert(kv);
         sa_kv_sptr temp = ::std::make_shared<a_kv_sptr>();
         temp->store(::std::move(kv), ::std::memory_order_relaxed);
-        assert(temp && temp->load());
         enqueue_new_node(temp);
-        m_hash.insert(k, temp);
+        assert(temp && temp->load());
+        m_hash.upsert(k, [&](auto& entry){ entry = temp; }, temp);
     }
 
     void enqueue_new_node(sa_kv_sptr ptr)

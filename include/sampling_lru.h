@@ -79,7 +79,7 @@ public:
         evict_if_needed();
         auto handler = m_storage.make_element(lru_clock_step_forward(), k, ::std::forward<Args>(args)...);
         ::std::shared_ptr<lru_element> lsptr{ handler, handler->ele_ptr() };
-        m_hash.insert(k, lsptr);
+        m_hash.upsert(k, [&](auto& entry) { entry = lsptr; }, lsptr);
         handler->make_valid();
         m_size.fetch_add(1, ::std::memory_order_relaxed);
         return { lsptr, &lsptr->m_mapped };
