@@ -1,5 +1,5 @@
 #include "benchmark_workers.h"
-#include "queue_lru.h"
+#include "fifo_hybrid_lru.h"
 #include <mutex>
 #include <set>
 
@@ -10,7 +10,7 @@ namespace rv = ::std::ranges::views;
 namespace nbtlru
 {
 
-static queue_lru<key_t, value_t> cache(benchmark_cache_size());
+static fifo_hybrid_lru<key_t, value_t> cache(benchmark_cache_size());
 ::std::mutex reset_lock;
 
 ::std::pair<t::nanoseconds, double> queue_lru_profiling_worker(::std::latch& l, size_t thrnum)

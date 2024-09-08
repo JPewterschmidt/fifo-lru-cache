@@ -6,7 +6,7 @@
 #include "csv2/writer.hpp"
 
 #include "naive_lru.h"
-#include "queue_lru.h"
+#include "fifo_hybrid_lru.h"
 #include "sampling_lru.h"
 #include "keys_generator.h"
 #include "distributions.h"
@@ -73,7 +73,7 @@ void different_dist()
         return nbtlru::naive_lru<key_t, value_t>(benchmark_cache_size());
     });
     different_dist_helper("different_dist_on_queue.csv", []{ 
-        return nbtlru::queue_lru<key_t, value_t>(benchmark_cache_size());
+        return nbtlru::fifo_hybrid_lru<key_t, value_t>(benchmark_cache_size());
     });
     different_dist_helper("different_dist_on_sampling.csv", []{ 
         return nbtlru::sampling_lru<key_t, value_t>(benchmark_cache_size());
