@@ -16,9 +16,9 @@ using namespace nbtlru;
 
 int main(int argc, char** argv)
 {
-    different_dist();   
+    //different_dist();   
     //multi_threads_profiling(12, "naive", naive_lru_profiling_worker);
-    multi_threads_profiling(12, "queue", queue_lru_profiling_worker);
+    //multi_threads_profiling(12, "queue", queue_lru_profiling_worker);
     //multi_threads_profiling(12, "sampling", sampling_lru_profiling_worker);
 
     return 0;   
