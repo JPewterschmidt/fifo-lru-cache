@@ -38,9 +38,9 @@ def draw_latency(df1, df2, df3, postfix='_latency.png'):
     sns.scatterplot(data=df2, x=df2.index, y='cost', s=50)
     sns.scatterplot(data=df3, x=df3.index, y='cost', s=50)
 
-    sns.lineplot(data=df1, x=df1.index, y='cost')
-    sns.lineplot(data=df2, x=df2.index, y='cost')
-    sns.lineplot(data=df3, x=df3.index, y='cost')
+    sns.lineplot(data=df1, x=df1.index, y='cost', label='Naive')
+    sns.lineplot(data=df2, x=df2.index, y='cost', label='FIFO-Hybrid')
+    sns.lineplot(data=df3, x=df3.index, y='cost', label='Sampling')
 
     plt.xlabel("Number of Threads")
     plt.ylabel(y_label)
@@ -64,9 +64,9 @@ def draw_throughput(df1, df2, df3, postfix='_throughput.png'):
     sns.scatterplot(data=df2, x=df2.index, y='throughput', s=50)
     sns.scatterplot(data=df3, x=df3.index, y='throughput', s=50)
 
-    sns.lineplot(data=df1, x=df1.index, y='throughput')
-    sns.lineplot(data=df2, x=df2.index, y='throughput')
-    sns.lineplot(data=df3, x=df3.index, y='throughput')
+    sns.lineplot(data=df1, x=df1.index, y='throughput', label='Naive')
+    sns.lineplot(data=df2, x=df2.index, y='throughput', label='FIFO-Hybrid')
+    sns.lineplot(data=df3, x=df3.index, y='throughput', label='Sampling')
 
     plt.xlabel("Number of Threads")
     plt.ylabel("Thoughput (MQPS)")
