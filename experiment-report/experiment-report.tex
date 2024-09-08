@@ -117,7 +117,7 @@ LRU-Policy 队列中存放指向 Manager Block 的智能指针，其字段如图
 返回空指针的情况继续尝试前面描述的步骤，直到能够锁定一个 LRU Element.
 进而获得对应元素的Key，从hash表中删除。
 
-与其他两种方案不同的是：由于采用了结合了两种算法，采用了两个无锁队列。
+与其他两种方案不同的是：由于结合了两种算法，采用了两个无锁队列。
 需要平衡两个队列的大小。
 本文中的方案为用户配置固定比例，默认FIFO-Policy Queue占总容量的 $80\%$,
 LRU-Policy Queue占总容量的$20\%$. 每次新增或者提升元素后，
@@ -161,9 +161,11 @@ LRU-Policy Queue占总容量的$20\%$. 每次新增或者提升元素后，
 
 本小节对上述LRU方案从命中率、吞吐量以及内存消耗三个维度进行性能测试。
 并分析三种方案中并发管理占总时间消耗的比例。
-其中命中率、吞吐量和内存消耗数据为同一次实验测得，
-便于后续讨论各种特征的相关性。
-未特别注明，默认缓存大小为总测试大小的1/10.
+其中命中率、吞吐量和内存消耗数据为同一次实验测得。
+\textbf{若未特别注明，则默认缓存大小为总测试大小的1/10, 进行30次测试取平均值, 每次测试重置缓存。}
+每次缓存失配罚执行\verb|_mm_pause()|50次。
+
+\subsubsection{命中率}
 
 \begin{figure}
     \subfigure[Na\"{i}ve-LRU Hit Ratio]{ 
@@ -179,12 +181,60 @@ LRU-Policy Queue占总容量的$20\%$. 每次新增或者提升元素后，
     \label{fig:dist_on_3_1thread}
 \end{figure}
 
-\subsubsection{命中率}
+首先对三个缓存实现在\textbf{单线程}下，
+分别用 Zipfian 分布以及 Uniform 分布生成测试数据对它们进行测试。
+测试结果如图\ref{fig:dist_on_3_1thread}所示，三者命中率差距较小。
+两种无锁缓存方案命中率表现略逊于Na\"{i}ve方案。
 
-首先对三个缓存实现在单线程下，分别用 Zipfian 分布以及 Uniform 分布生成测试数据对它们进行测试。
-测试结果如图\ref{fig:dist_on_3_1thread}所示，三者命中率大致相同.
+\begin{figure}
+    \centering
+    \includegraphics[width=0.6\textwidth]{pics/multi_threads_on_both_hitratio_latency.png}
+    \caption{各方案在多线程下的Zipfian型缓存访问命中率}
+    \label{fig:dist_multithread}
+\end{figure}
 
+由于并发方案为了并发性能在LRU原始理论的某些方面做了妥协和放松，
+因此其并发条件下命中率也许随并发规模变化而变化。
+如图\ref{fig:dist_multithread}所示，三种缓存方案多线程下对Zipfian类型访问命中率均维持在 $72\% \sim 75\%$ 以内，
+与单线程下测试相近。
+其中Na\"{i}ve和Sampling方案命中率稳定，分别保持在 $74.5\%$ 和 $74.7\%$左右。
+而FIFO-Hybrid-LRU命中率在 $72.9\% \sim 73.3\%$ 之间浮动。
+这种现象与两种队列大小比例相关。
 
+\subsubsection{吞吐量}
 
+\begin{figure}
+    \centering
+    \subfigure[吞吐量]{ 
+        \includegraphics[width=0.45\textwidth]{pics/multi_threads_on_both_latency_throughput.png}
+        \label{fig:throughput-sub1}
+    }
+    \subfigure[实验耗时]{ 
+        \includegraphics[width=0.45\textwidth]{pics/multi_threads_on_both_latency_latency.png}
+        \label{fig:throughput-sub2}
+    }
+    \caption{各方案在多线程下的Zipfian型缓存访问吞吐量和实验耗时}
+    \label{fig:throughput}
+\end{figure}
 
+基如图\ref{fig:throughput}所示, 于上文描述的实验方法，得出三种LRU完成试验所耗时间$l(ms)$以及吞吐量$t(\mbox{\small MQPS})$, 
+\begin{gather*}
+    l = l_{\mbox{\small hash query}} + l_{\mbox{\small promotion}} + l_{\mbox{\small insertion}} + l_{\mbox{\small penalty}} \label{eq:latency}\\
+    t = \frac{10^6}{(10^3)l} \mbox{MQPS}
+\end{gather*}
+其中\ref{fig:throughput-sub1}显示专为并发环境设计的两个LRU方案
+其吞吐量随着线程数增加而增加，符合本次实验目标。
+本实验实现的 FIFO-Hybrid-LRU 更胜一筹，原因有三：
+\begin{enumerate}
+    \item 其内部使用的无锁数据结构是经过开源社区检验的优秀实现;
+    \item 该设计以命中率略差的代价为并发性能赢得了空间；
+    \item Sampling-LRU 需要为每个元素实现类似锁的机制，
+        以避免并发采样过程中发生元素删除或回收，
+        除此以外相比Redis的节点内单线程实现，还有其他并发引入的管理开销。
+\end{enumerate}
+另外，作为基准对比，Na\"{i}ve 方案吞吐量在线程数 $\geq 2$ 后相对其他两个实现变化不大，
+但总体还是随线程数增加而减小。
+这一点从图\ref{fig:throughput-sub2}实验耗时上看更为明显。
+值得注意的是，吞吐量计算过程中，实验所耗事件如等式\ref{eq:latency}所示： 
+缓存失配，以及引发的罚时延迟都算入消耗时间内。
 

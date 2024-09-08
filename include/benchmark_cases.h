@@ -37,10 +37,10 @@ void benchmark_loop_body(auto& cache, key_t k, size_t& hits, size_t& misses, boo
     }
     else
     {
-        cache.put(k, value_t{});
-        ++misses;
         if (enable_penalty)
             penalty();
+        cache.put(k, value_t{});
+        ++misses;
     }
 }
 

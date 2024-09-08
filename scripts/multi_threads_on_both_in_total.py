@@ -30,6 +30,10 @@ df1_12only = df1.iloc[:12]
 df2_12only = df2.iloc[:12]
 df3_12only = df3.iloc[:12]
 
+print(df1)
+print(df2)
+print(df3)
+
 sns.set_style('whitegrid')
 
 def draw_latency(df1, df2, df3, postfix='_latency.png'):
