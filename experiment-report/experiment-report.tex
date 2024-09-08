@@ -50,48 +50,79 @@ m_cache_list.splice(m_cache_list.begin(), m_cache_list, it->second);
 其中 \verb|it->second| 是指向该链表节点的迭代器，该操作将它指向的节点的位置关系移动到
 \verb|m_cache_list.begin()|之前，所包含的元素并不会发生移动或拷贝。
 
-\subsubsection{无锁队列近似LRU}
+\subsubsection{无锁FIFO-Hybrid-LRU}
 
-该算法使用一个无锁队列模拟LRU算法（后称Q方案Queue-LRU）。
+该算法使用两个无锁队列和Hash表实现（后称H方案, FIFO-Hybrid-LRU）。
 
-LRU算法使用双链表是为了方便提升操作将节点从链表中任意位置分离，并重新插入链表头部。
-本文最初希望实现一个基于原子操作的无锁双链表。
-但在链表中部分离节点需要原子地修改两个指针，有工作提出使用CAS2操作实现这一功能。
-但CAS2并没有任何一款现代CPU支持。
+该方案从设计到实现并不容易，迭代了数个版本。
+本文最初设想实现一个无锁双链表来克服N方案中单把锁造成的竞争，
+在尝试过程中发现，并无办法实现对两个内存位置原子地进行修改，即CAS2。
+历史上确有工作在理论上倚靠CAS2操作实现无锁双链表。
+除了使用CAS2的链表理论，还有为单链表增加前驱节点提示的类双链表方案，
+因依赖这种没有保证的前驱提示来实现LRU，本文认为其行为不可预测性太大，遂未采用。
+除了上述两种链表方案，还有一种方案每次新插入链表两个节点的方案:
+数据节点的前驱为一Dummy节点，Dummy节点的后继为数据节点。
+在本文的应用场景中，在hash表中存储对应数据节点的Dummy节点，
+当要进行LRU Promotion 操作时删除该Dummy节点的后继节点，即数据节点。
+在LRU的使用场景中，频繁的Promition会造成大量的垃圾Dummy节点，
+且难以利用现有设施，因此本文考虑接下来要介绍的方案。
 
-相比之下，单链表使用CAS操作即可维持其结构。但其只能向后遍历，
-不能获取其前驱节点，则只能$O(n)$地分离一个节点。
-有工作也提出在每个新插入的数据节点前搭配一个 dummy 节点，辅助实现$O(1)$分离操作。
-但是这种方案在LRU的应用场景中会造成大量 dummy node 滞留在链表中。
-且必须从头实现，不容易利用已有设施。
-
-\begin{figure}[b]
-    \centering
-    \includegraphics[width=0.6\textwidth]{pics/queue-lru-overall.drawio.png}
-    \caption{Queue-LRU 示意图}
-    \label{fig:queue-lru-overall}
-\end{figure}
-
-再三权衡之后，本文使用一个无锁队列来实现LRU算法:
-如图\ref{fig:queue-lru-overall}所示，
-在新插入的节点直接入队，出队的节点作为淘汰节点。
-以
-\verb|shared_ptr<atomic<shared_ptr<lru_element>>>|
-作为入队的元素类型，以
-\verb|weak_ptr<atomic<shared_ptr<lru_element>>>|
-作为hash索引对象的类型。
+LRU中使用链表的根本目的是为了利用链表节点前驱后继关系表达LRU的 Promotion 和 Aging.
+使用双链表是为了方便Promotion操作将节点从链表中分离，然后再插入链表前部。
+除此之外，LRU场景下的双链表就像队列一样工作。
+因此本文的方案是直接使用无锁队列代替双链表，入队的对象类型一智能指针，
+并用hash表索引与该智能指针相关的数据。
 
 \begin{figure}
     \centering
-    \includegraphics[width=0.6\textwidth]{pics/queue-lru-promoted.drawio.png}
-    \caption{Queue-LRU 某节点提升后示意图}
-    \label{fig:queue-lru-promoted}
+    \includegraphics[width=0.9\textwidth]{pics/fifo-hybrid-lru.drawio.png}
+    \caption{FIFO混合LRU缓存结构示意图}
+    \label{fig:fifo-h}
 \end{figure}
 
-如图\ref{fig:queue-lru-promoted}所示,
-访问某节点，首先索引到对应节点的弱指针，进而\verb|atomic<shared_ptr>|指针。
-执行\textbf{提升操作}则使用原子\verb|exchange|将\verb|shared_ptr<lru_element>|换出，
-重新插入队头，最后更新索引。
+该方案中，将队中存放的智能指针置空实现类似于分离链表节点的操作，
+与上文中介绍的Dummy节点链表一样，会造成空间浪费。
+为了缓解这个问题，本实现引入FIFO淘汰算法与基于队列的LRU混合，如图\ref{fig:fifo-h}所示。
+它在减少队列中空指针元素造成的空间浪费的同时，
+提高扫描型访问\footnote{即缓存访问服从 Uniform 分布}的缓存命中率。
+
+该方案中，FIFO-Policy 队列中直接存放指向LRU Element 的\verb|weak_ptr|，对应的\verb|shared_ptr|被hash表持有。
+LRU Element 包含用户KV、指向指向Manager Block 的指针。
+LRU-Policy 队列中存放指向 Manager Block 的智能指针，其字段如图所示。
+
+访问缓存时，首先通过hash索引到对应 LRU Element 对象，
+之后立即对其中的指向 Manager Block 的指针做原子 \verb|exchange(nullptr)| 操作
+\footnote{实现中，所有原子操作遵循：读使用acquire内存序，写使用release内存序，exchange使用acq\_rel内存序}，
+其返回值由两种结果：
+\begin{enumerate}
+    \item \verb|==nullptr| 表示该元素被 FIFO-Policy 队列管理， 无需Promotion;
+    \item \verb|!=nullptr| 表示该元素被 LRU-Policy 队列管理，需要Promotion。
+\end{enumerate}
+上述\verb|exchange|操作只有一个线程会返回非空结果，该线程随即对其进行Promotion.
+同一时刻访问该元素的其他线程只能看到空指针，便认为其无需Promotion.
+
+成功\verb|exchange|到 Manager Block 指针的线程接下来将其指向 LRU Element 的指针字段原子地置空,
+相当于链表LRU中将节点从链表中分离的操作。此后，该线程将被访问 LRU Element 对应的\verb|weak_ptr|
+重新推入FIFO-Policy队列，至此完成Promotion操作。
+
+插入新元素时有必要的话先淘汰一个旧元素，
+然后将分配好的包含用户数据的LRU Element智能指针先插入到hash表，
+入队FIFO-Policy Queue即可；
+删除特定元素操作仅需要从hash表中删除对应元素即可，两个队列中引用对应LRU Element的\verb|weak_ptr|
+不会阻碍用户数据所占内存的回收。
+
+旧元素\textbf{淘汰操作}需从LRU-Policy Queue 中出队一个指向 Manager Block 的智能指针;
+原子地 \verb|exchange(nullptr)| 该 Manager Block 中指向 LRU Element 的指针对象，
+若返回值为 \verb|nullptr| 则说明对应元素要么被其他线程淘汰，要么当前 Manager Block 为提升操作产生的垃圾。
+返回空指针的情况继续尝试前面描述的步骤，直到能够锁定一个 LRU Element.
+进而获得对应元素的Key，从hash表中删除。
+
+与其他两种方案不同的是：由于采用了结合了两种算法，采用了两个无锁队列。
+需要平衡两个队列的大小。
+本文中的方案为用户配置固定比例，默认FIFO-Policy Queue占总容量的 $80\%$,
+LRU-Policy Queue占总容量的$20\%$. 每次新增或者提升元素后，
+需要触发一次平衡操作，若该比例失衡则从FIFO-Policy Queue出队元素，
+入队LRU-Policy Queue, 直到比例恢复。
 
 \subsubsection{无锁采样近似LRU}
 
@@ -151,10 +182,10 @@ S 方案是在Redis采样LRU算法的基础上，对其增加并发支持。
     \subfigure[Na\"{i}ve-LRU Hit Ratio]{ 
         \includegraphics[width=0.3\textwidth]{pics/different_dist_on_naive.png}
     }
-    \subfigure[Queue-lru Hit Ratio]{ 
+    \subfigure[FIFO-Hybrid-LRU Hit Ratio]{ 
         \includegraphics[width=0.3\textwidth]{pics/different_dist_on_queue.png}
     }
-    \subfigure[Sampling-lru Hit Ratio]{ 
+    \subfigure[Sampling-LRU Hit Ratio]{ 
         \includegraphics[width=0.3\textwidth]{pics/different_dist_on_sampling.png}
     }
     \caption{各LRU实现单线程下对两种访问类型模拟的命中率测试示意图}
