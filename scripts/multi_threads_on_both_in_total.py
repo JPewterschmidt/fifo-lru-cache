@@ -56,9 +56,9 @@ def draw_throughput(df1, df2, df3, postfix='_throughput.png'):
     if (need_draw_throughput == 0):
         return
 
-    df1 = (1000000 / df1) * 1000
-    df2 = (1000000 / df2) * 1000
-    df3 = (1000000 / df3) * 1000
+    df1 = (1000 / df1)
+    df2 = (1000 / df2)
+    df3 = (1000 / df3)
     df1.columns = ['throughput']
     df2.columns = ['throughput']
     df3.columns = ['throughput']
