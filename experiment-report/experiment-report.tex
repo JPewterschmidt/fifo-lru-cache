@@ -218,10 +218,10 @@ LRU-Policy Queue占总容量的$20\%$. 每次新增或者提升元素后，
 \end{figure}
 
 基如图\ref{fig:throughput}所示, 于上文描述的实验方法，得出三种LRU完成试验所耗时间$l(ms)$以及吞吐量$t(\mbox{\small MQPS})$, 
-\begin{gather*}
-    l = l_{\mbox{\small hash query}} + l_{\mbox{\small promotion}} + l_{\mbox{\small insertion}} + l_{\mbox{\small penalty}} \label{eq:latency}\\
-    t = \frac{10^6}{(10^3)l} \mbox{MQPS}
-\end{gather*}
+\begin{gather}
+    l = l_{\mbox{\small hash query}} + l_{\mbox{\small promotion/balance}} + l_{\mbox{\small insertion}} + l_{\mbox{\small penalty}} \label{eq:latency}\\
+    t = \frac{10^6}{l} \mbox{\small Q/ms} = \frac{1000}{l} \mbox{\small MQPS}
+\end{gather}
 其中\ref{fig:throughput-sub1}显示专为并发环境设计的两个LRU方案
 其吞吐量随着线程数增加而增加，符合本次实验目标。
 本实验实现的 FIFO-Hybrid-LRU 更胜一筹，原因有三：
@@ -237,4 +237,7 @@ LRU-Policy Queue占总容量的$20\%$. 每次新增或者提升元素后，
 这一点从图\ref{fig:throughput-sub2}实验耗时上看更为明显。
 值得注意的是，吞吐量计算过程中，实验所耗事件如等式\ref{eq:latency}所示： 
 缓存失配，以及引发的罚时延迟都算入消耗时间内。
+
+\subsubsection{内存和管理开销分析}
+
 
