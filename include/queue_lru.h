@@ -65,7 +65,16 @@ public:
             if (kv) break;
             ::_mm_pause();
         }
-        promote(k, kv);       
+
+        // promotion
+        m_hash.update_fn(k, [&, this](auto& entry) {
+            sa_kv_sptr newakv = ::std::make_shared<a_kv_sptr>();
+            newakv->store(::std::move(kv), ::std::memory_order_relaxed);
+            enqueue_new_node(newakv);
+            assert(newakv && newakv->load());
+            entry = newakv;
+            return true;
+        });
 
         return { kv, &kv->second };
     }
@@ -134,16 +143,6 @@ private:
         result_type mapped(kv, &kv->second);
         result->store(::std::move(kv), ::std::memory_order_relaxed);
         return { result, mapped };
-    }
-
-    void promote(const KeyType& k, kv_sptr kv)
-    {
-        assert(kv);
-        sa_kv_sptr temp = ::std::make_shared<a_kv_sptr>();
-        temp->store(::std::move(kv), ::std::memory_order_relaxed);
-        enqueue_new_node(temp);
-        assert(temp && temp->load());
-        m_hash.upsert(k, [&](auto& entry){ entry = temp; }, temp);
     }
 
     void enqueue_new_node(sa_kv_sptr ptr)
