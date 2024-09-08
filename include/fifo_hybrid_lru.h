@@ -27,9 +27,6 @@ public:
     using result_type = mapped_sptr;
 
 private:
-    struct lru_element;
-    using manage_block = ::std::atomic<::std::weak<lru_element>>
-
     struct lru_element
     {
         template<typename... Args>
@@ -41,24 +38,30 @@ private:
         const KeyType& key() const noexcept { return m_user_data.first; }
 
         kv_type m_user_data;
-        ::std::atomic<::std::shared_ptr<manage_block>> m_manage_block_ptr{};
+        ::std::atomic<::std::shared_ptr<::std::atomic<::std::weak_ptr<lru_element>>>> m_manage_block_ptr{};
     };
     
+    using manage_block = ::std::atomic<::std::weak_ptr<lru_element>>;
     using lru_ele_sptr = ::std::shared_ptr<lru_element>;
-    using manage_block_sptr = ::std::unique_ptr<manage_block>;
+    using manage_block_sptr = ::std::shared_ptr<manage_block>;
 
 private:
     ::std::atomic_size_t m_size{};
     ::std::size_t m_capacity{};
     ::std::size_t m_fifo_part_capacity{};
-    moodycamel::ConcurrentQueue<manage_block_sptr> m_fifo_policy_q;
-    moodycamel::ConcurrentQueue<manage_block_sptr> m_lru_policy_q;
+    ::std::size_t m_evict_thresh{};
+    
+    using queue_type = moodycamel::ConcurrentQueue<manage_block_sptr>;
+
+    queue_type m_fifo_policy_q;
+    queue_type m_lru_policy_q;
     libcuckoo::cuckoohash_map<KeyType, lru_ele_sptr, Hash, KeyEq> m_hash;
 
 public:
-    fifo_hybrid_lru(size_t capacity, double fifo_part_ratio = 0.8)
+    fifo_hybrid_lru(size_t capacity, double fifo_part_ratio = 0.8, double evict_thresh_ratio = 0.95)
         : m_capacity{ capacity }, 
-          m_fifo_part_capacity{ static_cast<size_t>(fifo_part_ratio * m_capacity) }
+          m_fifo_part_capacity{ static_cast<size_t>(fifo_part_ratio * m_capacity) }, 
+          m_evict_thresh{ m_capacity * evict_thresh_ratio }
     {
         if (m_capacity < 1000)
             m_capacity = 1000;
@@ -74,9 +77,9 @@ public:
             return {};
         }
 
-        auto mb = ele->m_manage_block_ptr.exchange({}, ::std::memory_order_acq_rel);
-
-        if (mb) promote(mb, ele);
+        manage_block_sptr mb = ele->m_manage_block_ptr.exchange({}, ::std::memory_order_acq_rel);
+        mb->store({}, ::std::memory_order_release);
+        if (mb) promote(ele);
         
         return { ele, &ele->m_user_data.second };
     }
@@ -89,8 +92,9 @@ public:
         m_hash.update(k, ele);
         auto mb = make_manage_block();
         mb->store(ele, ::std::memory_order_relaxed);
-        m_fifo_policy_q.push(::std::move(mb));
+        m_fifo_policy_q.enqueue(::std::move(mb));
         balance();
+        return { ele, &ele->m_user_data.second };
     }
 
     void erase(const KeyType& k) { m_hash.erase(k); }
@@ -108,22 +112,22 @@ public:
     size_t size_approx() const noexcept { return m_size.load(::std::memory_order_relaxed); }
     size_t capacity() const noexcept { return m_capacity; }
     size_t fifo_part_capacity() const noexcept { return m_fifo_part_capacity; }
+    size_t evict_thresh() const noexcept { return m_evict_thresh; }
 
     void reset()
     {
-        m_fifo_policy_q = {};
-        m_lru_policy_q = {};
+        m_fifo_policy_q = queue_type();
+        m_lru_policy_q = queue_type();
         m_hash.clear();
         m_size.store(0, ::std::memory_order_relaxed);
     }
 
 private:
-    void promote(manage_block_sptr& old_mb, element_sptr& ele) 
+    void promote(lru_ele_sptr& ele) 
     {
-        old_mb->store({}, ::std::memory_order_release);
         auto new_mb = make_manage_block();
-        ele->store(new_mb, ::std::memory_order_release);
-        m_fifo_policy_q.push(::std::move(new_mb));
+        ele->m_manage_block_ptr.store(new_mb, ::std::memory_order_release);
+        m_fifo_policy_q.enqueue(::std::move(new_mb));
     }
 
     manage_block_sptr make_manage_block()
@@ -166,15 +170,15 @@ private:
         while (m_fifo_policy_q.size_approx() >= fifo_part_capacity())
         {
             manage_block_sptr mb;
-            if (!m_fifo_part_capacity.try_dequeue(mb)) [[unlikely]]
+            if (!m_fifo_policy_q.try_dequeue(mb)) [[unlikely]]
             {
                 return;
             }
-            auto ele = mb->load(::std::memory_order_acquire);
+            auto ele = mb->load(::std::memory_order_acquire).lock();
             if (ele)
             {
                 ele->m_manage_block_ptr.store(mb, ::std::memory_order_release);
-                m_lru_policy_q.push(::std::move(mb));
+                m_lru_policy_q.enqueue(::std::move(mb));
                 return;
             }
         }
