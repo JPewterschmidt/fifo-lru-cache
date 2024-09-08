@@ -109,6 +109,14 @@ public:
     size_t capacity() const noexcept { return m_capacity; }
     size_t fifo_part_capacity() const noexcept { return m_fifo_part_capacity; }
 
+    void reset()
+    {
+        m_fifo_policy_q = {};
+        m_lru_policy_q = {};
+        m_hash.clear();
+        m_size.store(0, ::std::memory_order_relaxed);
+    }
+
 private:
     void promote(manage_block_sptr& old_mb, element_sptr& ele) 
     {
