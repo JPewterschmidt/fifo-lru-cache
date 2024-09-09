@@ -46,13 +46,21 @@ void benchmark_loop_body(auto& cache, key_t k, size_t& hits, size_t& misses, boo
     }
 }
 
-using worker_type = ::std::function<::std::pair<::std::chrono::nanoseconds, double>(::std::latch&, size_t)>;
+using worker_type = ::std::function<::std::pair<::std::chrono::nanoseconds, double>(::std::latch&, size_t, bool)>;
 
 inline auto tic() { return ::std::chrono::high_resolution_clock::now(); }
 ::std::chrono::nanoseconds toc(auto tp) { return ::std::chrono::duration_cast<::std::chrono::nanoseconds>(tic() - tp); }
 
 void different_dist();
-void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, worker_type worker, bool slience = false);
+
+void multi_threads_profiling(
+    size_t thrnum, 
+    ::std::string_view profile_name, 
+    worker_type worker, 
+    bool slience = false, 
+    size_t repeats = 30, 
+    bool enable_penalty = true
+);
 
 inline ::std::variant<::std::true_type, ::std::false_type>
 boolvar_to_constant(bool val)
