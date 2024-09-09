@@ -9,6 +9,8 @@
 #include <string_view>
 #include <utility>
 #include <thread>
+#include <type_traits>
+#include <variant>
 
 #include <immintrin.h>
 
@@ -50,7 +52,14 @@ inline auto tic() { return ::std::chrono::high_resolution_clock::now(); }
 ::std::chrono::nanoseconds toc(auto tp) { return ::std::chrono::duration_cast<::std::chrono::nanoseconds>(tic() - tp); }
 
 void different_dist();
-void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, worker_type worker);
+void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, worker_type worker, bool slience = false);
+
+inline ::std::variant<::std::true_type, ::std::false_type>
+boolvar_to_constant(bool val)
+{
+    if (val) return { ::std::true_type{} };
+    else return { ::std::false_type{} };
+}
 
 } // namespace nbtlru
 

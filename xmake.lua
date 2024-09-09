@@ -9,6 +9,8 @@ add_requires(
     "gperftools"
 )
 
+add_packages("csv2", "concurrentqueue")
+
 set_languages("c++23", "c17")
 set_policy("build.warning", true)
 set_policy("build.optimization.lto", false)
@@ -54,11 +56,28 @@ target("test")
         --nothing
     end)
 
+target("benchmark-deps")
+    set_kind("shared")
+    add_packages("csv2")
+    add_files(
+        "benchmark-deps/*.cc",
+        "smhasher/src/Murmur*.cpp"
+    )
+    add_includedirs("dirtyzipf")
+    add_packages("csv2")
+    set_policy("build.warning", false)
+    add_deps("nbtlru")
+    add_packages(
+        "gflags", 
+        "concurrentqueue"
+    )
+
+
 target("benchmark")
     set_kind("binary")
-    add_packages("benchmark")
+    add_deps("benchmark-deps")
     add_files(
-        "benchmark/*.cc", 
+        "benchmark/*.cc",
         "smhasher/src/Murmur*.cpp"
     )
     add_includedirs("dirtyzipf")
@@ -132,3 +151,69 @@ target("benchmark")
         os.cd(old_working_dir)
     end)
 
+target("gperftool-fifo-hybrid")
+    set_kind("binary")
+    set_symbols("debug")
+    add_syslinks("tcmalloc", "profiler")
+    add_files(
+        "benchmark-deps/*.cc",
+        "gperftool-fifo-hybrid/*.cc", 
+        "smhasher/src/Murmur*.cpp"
+    )
+    add_includedirs("dirtyzipf")
+    add_deps("nbtlru")
+    on_run(function (target)
+        os.setenv("HEAPPROFILE", target:name() .. ".heap")
+        os.exec(target:targetfile())
+    end)
+    after_run(function (target)
+        if (is_mode("debug")) then
+            return 
+        end
+
+    end)
+    
+target("gperftool-naive")
+    set_kind("binary")
+    set_symbols("debug")
+    add_syslinks("tcmalloc", "profiler")
+    add_files(
+        "benchmark-deps/*.cc",
+        "gperftool-naive/*.cc", 
+        "smhasher/src/Murmur*.cpp"
+    )
+    add_includedirs("dirtyzipf")
+    add_deps("nbtlru")
+    on_run(function (target)
+        os.setenv("HEAPPROFILE", target:name() .. ".heap")
+        os.exec(target:targetfile())
+    end)
+    after_run(function (target)
+        if (is_mode("debug")) then
+            return 
+        end
+
+    end)
+    
+target("gperftool-sampling")
+    set_kind("binary")
+    set_symbols("debug")
+    add_syslinks("tcmalloc", "profiler")
+    add_files(
+        "benchmark-deps/*.cc",
+        "gperftool-sampling/*.cc", 
+        "smhasher/src/Murmur*.cpp"
+    )
+    add_includedirs("dirtyzipf")
+    add_deps("nbtlru")
+    on_run(function (target)
+        os.setenv("HEAPPROFILE", target:name() .. ".heap")
+        os.exec(target:targetfile())
+    end)
+    after_run(function (target)
+        if (is_mode("debug")) then
+            return 
+        end
+
+    end)
+    
