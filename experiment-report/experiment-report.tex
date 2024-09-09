@@ -4,13 +4,22 @@
     本实验分别实现了传统LRU淘汰算法在单线程以及单把锁的多线程版本，用于展示lock contention对性能的影响。
     另外实现了基于无锁队列和智能指针的近似LRU算法、
     类似于Redis方案的采样LRU算法。
-    本实验分别对不同线程数量、不同缓存容量以及不同缓存访问行为三个角度出发对上述三种缓存进行性能测试。
-    报告还介绍了本实验的三种缓存的部分实现细节以及其对性能的影响，最后还有本人对系统方向优化工作的感想。
+    本实验分别对不同线程数量、不同缓存容量以及不同缓存访问行为三个角度出发对上述三种缓存进行性能测试,
+    报告还介绍了本实验的三种缓存的部分实现细节以及其对性能的影响.
+    对考核和拓展阅读文章的学习总结,
+    最后还有本人对系统方向优化工作的感想。
     
     \textbf{关键字:}\quad LRU\quad 采样LRU\quad lock-free\quad 无锁队列\quad 并发编程
 \end{abstract}
 
 \section{实验报告}
+
+\subsection{实验目的}
+
+本次实验主要通过实现、讨论两种无锁LRU方案和传统单线程/一把锁的LRU方案，
+从算法和并发两个角度上学习LRU缓存理论, 训练单机单CPU并发编程能力。
+通过性能测试找出各LRU实现特点，深化原子操作等并发编程技巧，提高业务基础能力。
+向读者大致展示本人的学习和实践能力。
 
 \subsection{实验平台}
 
@@ -50,7 +59,7 @@ m_cache_list.splice(m_cache_list.begin(), m_cache_list, it->second);
 其中 \verb|it->second| 是指向该链表节点的迭代器，该操作将它指向的节点的位置关系移动到
 \verb|m_cache_list.begin()|之前，所包含的元素并不会发生移动或拷贝。
 
-\subsubsection{无锁FIFO-Hybrid-LRU}
+\subsubsection{无锁FIFO-Hybrid-LRU}\label{sec:fifo-hybrid}
 
 该算法使用两个无锁队列和Hash表实现（后称H方案, FIFO-Hybrid-LRU）。
 
@@ -238,7 +247,76 @@ LRU-Policy Queue占总容量的$20\%$. 每次新增或者提升元素后，
 值得注意的是，吞吐量计算过程中，实验所耗事件如等式\ref{eq:latency}所示： 
 缓存失配，以及引发的罚时延迟都算入消耗时间内。
 
-\subsubsection{内存和Call Graph分析}
+\subsubsection{两个无锁方案的不严谨热力图分析}
 
+本小节对三种缓存实现在Debug模式下使用perf进行调用热力分析，
+大致可以反映缓存系统中关键操作耗时占比。
+其性能表现无法和Release模式媲美，因此仅作参考。
 
+\begin{figure}
+    \centering
+    \includegraphics[width=1\textwidth]{pics/fifo-hybrid-get.png}
+    \caption{FIFO-Hybrid-LRU的get操作调用热力图}
+    \label{fig:fifo-get}
+\end{figure}
+
+如图\ref{fig:fifo-get}所示，FIFO-Hybrid-LRU 的 \verb|get|操作中,
+耗时主要被hash查询占用，有$87.65\%$；\verb|promote|操作只占用\verb|get|的$8.02\%$。
+者表明本实验实现的 FIFO-Hybrid-LRU 虽然同为利用元素位置关系表达Aging的实现，
+但其\verb|promote|操作并未成为其瓶颈。
+
+\begin{figure}
+    \centering
+    \subfigure[put操作总览]{ 
+        \includegraphics[width=1\textwidth]{pics/fifo-hybrid-put.png}
+        \label{fig:fifo-put-overall}
+    }
+    \subfigure[evict\_whatever]{ 
+        \includegraphics[width=1\textwidth]{pics/fifo-hybrid-evictwhatever.png}
+        \label{fig:fifo-put-evict}
+    }
+    \caption{FIFO-Hybrid-LRU的put操作调用热力图}
+    \label{fig:fifo-put}
+\end{figure}
+
+再看图\ref{fig:fifo-put-overall}，FIFO-Hybrid-LRU 的 \verb|put|操作中
+耗时主要集中在更新hash表、平衡两队列大小以及淘汰旧元素上。
+三者耗时分别占\verb|put|总耗时的 $28\%, 23.81\%, 35.2\%$. 
+淘汰旧元素操作如图\ref{fig:fifo-put-evict}所示，其中主要耗时有元素出队及从hash表删除数据，
+分别占\verb|evict_whatever|的$33\%$和$39.4\%$.
+
+\begin{figure}
+    \centering
+    \subfigure[get操作]{ 
+        \includegraphics[width=1\textwidth]{pics/sampling-get.png}
+        \label{fig:sampling-get}
+    }
+    \subfigure[put操作]{ 
+        \includegraphics[width=1\textwidth]{pics/sampling-put.png}
+        \label{fig:sampling-put}
+    }
+    \caption{Sampling-LRU的get和put调用热力图}
+    \label{fig:sampling-get-put}
+\end{figure}
+
+有关Sampling-LRU，如图\ref{fig:sampling-get}所示其\verb|get|操作主要耗时在hash表查询上，占$90\%$;
+通过更新访问时刻达到Promotion的操作占比极小，仅有$1.7\%$，这与其仅写入两个内存位置，并且使用最宽松的relaxed内存序有关。
+可见 Sampling-LRU 非常适合读密集场合使用。
+
+而其写性能就差强人意了，如图\ref{fig:sampling-put}所示:
+当缓存容量耗尽时开始，每次新增一个元素就要淘汰一个旧元素。
+本实现中需要使用随机引擎生成随机下标、对选中的元素进行类似上锁操作，
+再从中挑选一个最久未使用的淘汰。算法最后还要为每个被选中元素解锁。
+这一过程中相比Redis的实现，为了保证并发访问的正确性付出很大的管理代价。
+这也解释了为什么在本次实验中其性能表现不如 FIFO-Hybrid-LRU.
+当然本人的Sampling-LRU实现很粗糙，
+对其进行优化会有更好的性能表现。
+
+\subsection{实验总结}
+
+本次实验清楚地展示了两种LRU缓存实现方案(基于数据结构内元素位序、基于时间戳)的基本特点，
+深化了本人在当前领域的认识，和并发编程能力。
+更具体地认识到了不当使用锁会造成的严重性能后果。
+此外,本人还学习了Redis简洁的设计理念。其各节点内单线程运行的方式杜绝了线程间并发管理开销，
+从软件结构层面避免了很多并发场景性能问题。
 

@@ -13,7 +13,7 @@ namespace nbtlru
 static fifo_hybrid_lru<key_t, value_t> cache(benchmark_cache_size());
 ::std::mutex reset_lock;
 
-::std::pair<t::nanoseconds, double> queue_lru_profiling_worker(::std::latch& l, size_t thrnum)
+::std::pair<t::nanoseconds, double> fifo_hybrid_lru_profiling_worker(::std::latch& l, size_t thrnum, bool enable_penalty)
 {
     {
         ::std::lock_guard lk{ reset_lock };
@@ -25,7 +25,7 @@ static fifo_hybrid_lru<key_t, value_t> cache(benchmark_cache_size());
 
     for (auto k : gen<zipf, key_t>(benchmark_scale(), true) | rv::take(benchmark_scale() / thrnum))
     {
-        benchmark_loop_body(cache, k, hits, misses);
+        benchmark_loop_body(cache, k, hits, misses, enable_penalty);
     }
 
     auto time_elapsed = toc(tp);

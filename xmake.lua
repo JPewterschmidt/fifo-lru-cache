@@ -36,6 +36,7 @@ target("nbtlru")
         "include", 
         "smhasher/src",
         "rustex",
+        "dirtyzipf",
         { public = true }
     )
 
@@ -151,69 +152,27 @@ target("benchmark")
         os.cd(old_working_dir)
     end)
 
-target("gperftool-fifo-hybrid")
+target("only-fifo-hybrid")
     set_kind("binary")
+    set_optimize("fastest")
+    add_cxxflags("-g", "-fno-omit-frame-pointer")
     set_symbols("debug")
-    add_syslinks("tcmalloc", "profiler")
-    add_files(
-        "benchmark-deps/*.cc",
-        "gperftool-fifo-hybrid/*.cc", 
-        "smhasher/src/Murmur*.cpp"
-    )
-    add_includedirs("dirtyzipf")
-    add_deps("nbtlru")
-    on_run(function (target)
-        os.setenv("HEAPPROFILE", target:name() .. ".heap")
-        os.exec(target:targetfile())
-    end)
-    after_run(function (target)
-        if (is_mode("debug")) then
-            return 
-        end
+    add_deps("benchmark-deps", "nbtlru")
+    add_files("only-fifo-hybrid/*.cc")
 
-    end)
-    
-target("gperftool-naive")
+target("only-naive")
     set_kind("binary")
+    set_optimize("fastest")
+    add_cxxflags("-g", "-fno-omit-frame-pointer")
     set_symbols("debug")
-    add_syslinks("tcmalloc", "profiler")
-    add_files(
-        "benchmark-deps/*.cc",
-        "gperftool-naive/*.cc", 
-        "smhasher/src/Murmur*.cpp"
-    )
-    add_includedirs("dirtyzipf")
-    add_deps("nbtlru")
-    on_run(function (target)
-        os.setenv("HEAPPROFILE", target:name() .. ".heap")
-        os.exec(target:targetfile())
-    end)
-    after_run(function (target)
-        if (is_mode("debug")) then
-            return 
-        end
+    add_deps("benchmark-deps", "nbtlru")
+    add_files("only-naive/*.cc")
 
-    end)
-    
-target("gperftool-sampling")
+target("only-sampling")
     set_kind("binary")
+    set_optimize("fastest")
+    add_cxxflags("-g", "-fno-omit-frame-pointer")
     set_symbols("debug")
-    add_syslinks("tcmalloc", "profiler")
-    add_files(
-        "benchmark-deps/*.cc",
-        "gperftool-sampling/*.cc", 
-        "smhasher/src/Murmur*.cpp"
-    )
-    add_includedirs("dirtyzipf")
-    add_deps("nbtlru")
-    on_run(function (target)
-        os.setenv("HEAPPROFILE", target:name() .. ".heap")
-        os.exec(target:targetfile())
-    end)
-    after_run(function (target)
-        if (is_mode("debug")) then
-            return 
-        end
+    add_deps("benchmark-deps", "nbtlru")
+    add_files("only-sampling/*.cc")
 
-    end)
-    

@@ -12,7 +12,7 @@ namespace nbtlru
 static naive_lru<key_t, value_t> cache(benchmark_cache_size());
 static ::std::mutex lock;
  
-::std::pair<t::nanoseconds, double> naive_lru_profiling_worker(::std::latch& l, size_t thrnum)
+::std::pair<t::nanoseconds, double> naive_lru_profiling_worker(::std::latch& l, size_t thrnum, bool enable_penalty)
 {
     {
         ::std::lock_guard lk{ lock };
@@ -25,7 +25,7 @@ static ::std::mutex lock;
     for (auto k : gen<zipf, key_t>(benchmark_scale(), true) | rv::take(benchmark_scale() / thrnum))
     {
         ::std::lock_guard lk{ lock };
-        benchmark_loop_body(cache, k, hits, misses);
+        benchmark_loop_body(cache, k, hits, misses, enable_penalty);
     }
 
     auto time_elapsed = toc(tp);

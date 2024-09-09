@@ -24,14 +24,14 @@ namespace nbtlru
 {
 
 ::std::pair<t::nanoseconds, double> 
-multi_thread_profiling_helper(size_t thrnum, ::std::string_view profile_name, worker_type worker, auto slience)
+multi_thread_profiling_helper(size_t thrnum, ::std::string_view profile_name, worker_type worker, auto slience, bool enable_penalty)
 {
     ::std::latch l{ thrnum };
 
     ::std::vector<::std::future<::std::pair<t::nanoseconds, double>>> elapses;
     for (size_t i{}; i < thrnum; ++i)
     {
-        elapses.emplace_back(::std::async(::std::launch::async, [&]{ return worker(l, thrnum); }));
+        elapses.emplace_back(::std::async(::std::launch::async, [&]{ return worker(l, thrnum, enable_penalty); }));
     }
 
     auto result = r::fold_left_first(
@@ -50,7 +50,11 @@ multi_thread_profiling_helper(size_t thrnum, ::std::string_view profile_name, wo
     return result;
 }
 
-void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, worker_type worker, bool slience)
+void multi_threads_profiling(
+    size_t thrnum, 
+    ::std::string_view profile_name, 
+    worker_type worker, 
+    bool slience, size_t repeats, bool enable_penalty)
 {
     ::std::stringstream ss;
     ::std::string latency_file_name;
@@ -96,7 +100,7 @@ void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, wor
     ::std::visit([&](auto slience) mutable
     { 
         auto thrs = rv::iota(1ull, thrnum + 1) | r::to<::std::vector>();
-        for (size_t i{}; i < 30; ++i)
+        for (size_t i{}; i < repeats; ++i)
         {
             ::std::random_device rd;
             ::std::mt19937 mt_gen(rd());
@@ -106,7 +110,7 @@ void multi_threads_profiling(size_t thrnum, ::std::string_view profile_name, wor
                 | rv::transform([&](auto&& thrnum) { 
                       return ::std::pair{ 
                           thrnum, 
-                          multi_thread_profiling_helper(thrnum, profile_name, worker, slience) 
+                          multi_thread_profiling_helper(thrnum, profile_name, worker, slience, enable_penalty) 
                       }; 
                   })
                 | r::to<::std::vector>()
