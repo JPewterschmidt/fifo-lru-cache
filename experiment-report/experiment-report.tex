@@ -43,10 +43,11 @@ xmake f -m release; xmake -j 12; xmake r
 
 \subsection{实现细节}
 
-所有实现中使用的Hash算法均为 MurmurHash3 中的x64版本，输出的是128位Hash值。
+所有实现中使用的Hash算法均为 MurmurHash3\cite{smhasher} 中的x64版本，输出的是128位Hash值。
 本实验对其输出的128位Hash值做\verb|h[0] ^ (h[1] << 1)|处理以适应所使用的HashMap对象的要求。
 单线程版本的LRU缓存使用\verb|std::unordered_map|作为hash索引，
-其他两个无锁LRU缓存使用\verb|libcuckoo::cuckoohash_map|作为hash索引。
+其他两个无锁LRU缓存使用\verb|libcuckoo::cuckoohash_map|\cite{libcuckoo}作为hash索引。
+无锁队列为\verb|moodycamel::ConcurrentQueue|\cite{cameron_concurrentqueue}.
 
 \subsubsection{单线程/单把锁LRU缓存}
 
@@ -173,6 +174,8 @@ LRU-Policy Queue占总容量的$20\%$. 每次新增或者提升元素后，
 其中命中率、吞吐量和内存消耗数据为同一次实验测得。
 \textbf{若未特别注明，则默认缓存大小为总测试大小的1/10, 进行30次测试取平均值, 每次测试重置缓存。}
 每次缓存失配罚执行\verb|_mm_pause()|50次。
+
+本实验使用 Zipfian 分布模拟有局部性的缓存访问，其skew factor 采用实现默认的$\theta = 0.99$\cite{dirtyzipf2024}.
 
 \subsubsection{命中率}
 
