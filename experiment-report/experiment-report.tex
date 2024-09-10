@@ -73,12 +73,12 @@ m_cache_list.splice(m_cache_list.begin(), m_cache_list, it->second);
 除了上述两种链表方案，还有一种方案每次新插入链表两个节点的方案:
 数据节点的前驱为一Dummy节点，Dummy节点的后继为数据节点。
 在本文的应用场景中，在hash表中存储对应数据节点的Dummy节点，
-当要进行LRU Promotion 操作时删除该Dummy节点的后继节点，即数据节点。
-在LRU的使用场景中，频繁的Promition会造成大量的垃圾Dummy节点，
+当要进行LRU 提升 操作时删除该Dummy节点的后继节点，即数据节点。
+在LRU的使用场景中，频繁的提升会造成大量的垃圾Dummy节点，
 且难以利用现有设施，因此本文考虑接下来要介绍的方案。
 
-LRU中使用链表的根本目的是为了利用链表节点前驱后继关系表达LRU的 Promotion 和 Aging.
-使用双链表是为了方便Promotion操作将节点从链表中分离，然后再插入链表前部。
+LRU中使用链表的根本目的是为了利用链表节点前驱后继关系表达LRU的 提升 和 Aging.
+使用双链表是为了方便提升操作将节点从链表中分离，然后再插入链表前部。
 除此之外，LRU场景下的双链表就像队列一样工作。
 因此本文的方案是直接使用无锁队列代替双链表，入队的对象类型一智能指针，
 并用hash表索引与该智能指针相关的数据。
@@ -93,8 +93,6 @@ LRU中使用链表的根本目的是为了利用链表节点前驱后继关系�
 该方案中，将队中存放的智能指针置空实现类似于分离链表节点的操作，
 与上文中介绍的Dummy节点链表一样，会造成空间浪费。
 为了缓解这个问题，本实现引入FIFO淘汰算法与基于队列的LRU混合，如图\ref{fig:fifo-h}所示。
-它在减少队列中空指针元素造成的空间浪费的同时，
-提高扫描型访问\footnote{即缓存访问服从 Uniform 分布}的缓存命中率。
 
 该方案中，FIFO-Policy 队列中直接存放指向LRU Element 的\verb|weak_ptr|，对应的\verb|shared_ptr|被hash表持有。
 LRU Element 包含用户KV、指向指向Manager Block 的指针。
@@ -124,7 +122,7 @@ LRU-Policy 队列中存放指向 Manager Block 的智能指针，其字段如图
 旧元素\textbf{淘汰操作}需从LRU-Policy Queue 中出队一个指向 Manager Block 的智能指针;
 原子地 \verb|exchange(nullptr)| 该 Manager Block 中指向 LRU Element 的指针对象，
 若返回值为 \verb|nullptr| 则说明对应元素要么被其他线程淘汰，要么当前 Manager Block 为提升操作产生的垃圾。
-返回空指针的情况继续尝试前面描述的步骤，直到能够锁定一个 LRU Element.
+继续尝试前面描述的步骤，直到能够锁定一个 LRU Element.
 进而获得对应元素的Key，从hash表中删除。
 
 与其他两种方案不同的是：由于结合了两种算法，采用了两个无锁队列。
@@ -303,7 +301,7 @@ LRU-Policy Queue占总容量的$20\%$. 每次新增或者提升元素后，
 \end{figure}
 
 有关Sampling-LRU，如图\ref{fig:sampling-get}所示其\verb|get|操作主要耗时在hash表查询上，占$90\%$;
-通过更新访问时刻达到Promotion的操作占比极小，仅有$1.7\%$，这与其仅写入两个内存位置，并且使用最宽松的relaxed内存序有关。
+通过更新访问时刻达到提升的操作占比极小，仅有$1.7\%$，这与其仅写入两个内存位置，并且使用最宽松的relaxed内存序有关。
 可见 Sampling-LRU 非常适合读密集场合使用。
 
 而其写性能就差强人意了，如图\ref{fig:sampling-put}所示:

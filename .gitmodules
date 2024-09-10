@@ -1,15 +1,9 @@
-[submodule "toolpex"]
-	path = toolpex
-	url = git@github.com:JPewterschmidt/toolpex.git
 [submodule "dirtyzipf"]
 	path = dirtyzipf
 	url = git@github.com:ekg/dirtyzipf.git
 [submodule "smhasher"]
 	path = smhasher
 	url = git@github.com:aappleby/smhasher.git
-[submodule "rustex"]
-	path = rustex
-	url = git@github.com:dragazo/rustex.git
 [submodule "libcuckoo"]
 	path = libcuckoo
 	url = git@github.com:efficient/libcuckoo.git
