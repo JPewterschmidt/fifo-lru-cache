@@ -72,7 +72,7 @@ void different_dist()
     different_dist_helper("different_dist_on_naive.csv", []{ 
         return nbtlru::naive_lru<key_t, value_t>(benchmark_cache_size());
     });
-    different_dist_helper("different_dist_on_queue.csv", []{ 
+    different_dist_helper("different_dist_on_fifo-hybrid.csv", []{ 
         return nbtlru::fifo_hybrid_lru<key_t, value_t>(benchmark_cache_size());
     });
     different_dist_helper("different_dist_on_sampling.csv", []{ 

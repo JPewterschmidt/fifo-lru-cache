@@ -107,8 +107,8 @@ target("benchmark")
         os.execv(
             "python", { 
                 "scripts/different_dist.py", 
-                target:targetdir() .. "/different_dist_on_fifo_hybrid.csv", 
-                "experiment-report/pics/different_dist_on_fifo_hybrid.png"
+                target:targetdir() .. "/different_dist_on_fifo-hybrid.csv", 
+                "experiment-report/pics/different_dist_on_fifo-hybrid.png"
             }
         )
 
@@ -125,7 +125,7 @@ target("benchmark")
             "python", { 
                 "scripts/multi_threads_on_both_in_total.py", 
                 target:targetdir() .. "/multi_threads_on_naive_latency.csv", 
-                target:targetdir() .. "/multi_threads_on_fifo_hybrid_latency.csv", 
+                target:targetdir() .. "/multi_threads_on_fifo-hybrid_latency.csv", 
                 target:targetdir() .. "/multi_threads_on_sampling_latency.csv", 
                 "experiment-report/pics/multi_threads_on_both_latency", 
                 "Time Elasped (ms)", 
@@ -137,7 +137,7 @@ target("benchmark")
             "python", { 
                 "scripts/multi_threads_on_both_in_total.py", 
                 target:targetdir() .. "/multi_threads_on_naive_hitratio.csv", 
-                target:targetdir() .. "/multi_threads_on_fifo_hybrid_hitratio.csv", 
+                target:targetdir() .. "/multi_threads_on_fifo-hybrid_hitratio.csv", 
                 target:targetdir() .. "/multi_threads_on_sampling_hitratio.csv", 
                 "experiment-report/pics/multi_threads_on_both_hitratio", 
                 "Hits Ratio", 
