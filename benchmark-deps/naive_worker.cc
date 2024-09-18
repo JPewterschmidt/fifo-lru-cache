@@ -1,4 +1,3 @@
-#include "rustex.h"
 #include "naive_lru.h"
 #include "benchmark_workers.h"
 
