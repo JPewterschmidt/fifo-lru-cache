@@ -4,14 +4,13 @@ add_rules(
 )
 
 add_requires(
-    "benchmark", "gtest", "csv2",
-    "concurrentqueue", 
-    "gperftools"
+    "gtest",
+    "concurrentqueue"
 )
 
-add_packages("csv2", "concurrentqueue")
+add_packages("concurrentqueue")
 
-set_languages("c++23", "c17")
+set_languages("c++20", "c17")
 set_policy("build.warning", true)
 set_policy("build.optimization.lto", false)
 set_toolset("cc", "mold", {force = true}) 
@@ -21,28 +20,21 @@ if is_mode("asan") then
     set_optimize("none", {force = true})
 end
 
-if is_mode("release") then
-    set_optimize("fastest", {force = true})
-end
-
 add_includedirs("libcuckoo/libcuckoo")
 
-target("nbtlru")
+target("fifo-lru-cache")
     set_kind("headeronly")
     add_packages("concurrentqueue");
-    add_packages("atomic_queue");
     set_warnings("all", "error")
     add_includedirs(
         "include", 
         "smhasher/src",
-        "rustex",
-        "dirtyzipf",
         { public = true }
     )
 
 target("test")
     set_kind("binary")
-    add_deps("nbtlru")
+    add_deps("fifo-lru-cache")
     add_files(
         "test/*.cc",
         "smhasher/src/Murmur*.cpp"
@@ -56,123 +48,3 @@ target("test")
     on_run(function (target)
         --nothing
     end)
-
-target("benchmark-deps")
-    set_kind("shared")
-    add_packages("csv2")
-    add_files(
-        "benchmark-deps/*.cc",
-        "smhasher/src/Murmur*.cpp"
-    )
-    add_includedirs("dirtyzipf")
-    add_packages("csv2")
-    set_policy("build.warning", false)
-    add_deps("nbtlru")
-    add_packages(
-        "gflags", 
-        "concurrentqueue"
-    )
-
-
-target("benchmark")
-    set_kind("binary")
-    add_deps("benchmark-deps")
-    add_files(
-        "benchmark/*.cc",
-        "smhasher/src/Murmur*.cpp"
-    )
-    add_includedirs("dirtyzipf")
-    add_packages("csv2")
-    set_policy("build.warning", true)
-    add_deps("nbtlru")
-    add_packages(
-        "gflags", 
-        "concurrentqueue"
-    )
-    after_run(function (target)
-        if is_mode("debug") then
-            return
-        end
-
-        print("drawing pictures ... ")
-
-        os.execv(
-            "python", { 
-                "scripts/different_dist.py", 
-                target:targetdir() .. "/different_dist_on_naive.csv", 
-                "experiment-report/pics/different_dist_on_naive.png"
-            }
-        )
-
-        os.execv(
-            "python", { 
-                "scripts/different_dist.py", 
-                target:targetdir() .. "/different_dist_on_fifo-hybrid.csv", 
-                "experiment-report/pics/different_dist_on_fifo-hybrid.png"
-            }
-        )
-
-        os.execv(
-            "python", { 
-                "scripts/different_dist.py", 
-                target:targetdir() .. "/different_dist_on_sampling.csv", 
-                "experiment-report/pics/different_dist_on_sampling.png"
-            }
-        )
-
-
-        os.execv(
-            "python", { 
-                "scripts/multi_threads_on_both_in_total.py", 
-                target:targetdir() .. "/multi_threads_on_naive_latency.csv", 
-                target:targetdir() .. "/multi_threads_on_fifo-hybrid_latency.csv", 
-                target:targetdir() .. "/multi_threads_on_sampling_latency.csv", 
-                "experiment-report/pics/multi_threads_on_both_latency", 
-                "Time Elasped (ms)", 
-                "1"
-            }
-        )
-
-        os.execv(
-            "python", { 
-                "scripts/multi_threads_on_both_in_total.py", 
-                target:targetdir() .. "/multi_threads_on_naive_hitratio.csv", 
-                target:targetdir() .. "/multi_threads_on_fifo-hybrid_hitratio.csv", 
-                target:targetdir() .. "/multi_threads_on_sampling_hitratio.csv", 
-                "experiment-report/pics/multi_threads_on_both_hitratio", 
-                "Hits Ratio", 
-                "0"
-            }
-        )
-        
-        print("compiling report ... ")
-        old_working_dir = os.workingdir()
-        os.cd('experiment-report')
-        os.execv("xelatex", { "main.tex" })
-        os.cd(old_working_dir)
-    end)
-
-target("only-fifo-hybrid")
-    set_kind("binary")
-    set_optimize("fastest")
-    add_cxxflags("-g", "-fno-omit-frame-pointer")
-    set_symbols("debug")
-    add_deps("benchmark-deps", "nbtlru")
-    add_files("only-fifo-hybrid/*.cc")
-
-target("only-naive")
-    set_kind("binary")
-    set_optimize("fastest")
-    add_cxxflags("-g", "-fno-omit-frame-pointer")
-    set_symbols("debug")
-    add_deps("benchmark-deps", "nbtlru")
-    add_files("only-naive/*.cc")
-
-target("only-sampling")
-    set_kind("binary")
-    set_optimize("fastest")
-    add_cxxflags("-g", "-fno-omit-frame-pointer")
-    set_symbols("debug")
-    add_deps("benchmark-deps", "nbtlru")
-    add_files("only-sampling/*.cc")
-

@@ -1,6 +1,3 @@
-[submodule "dirtyzipf"]
-	path = dirtyzipf
-	url = git@github.com:ekg/dirtyzipf.git
 [submodule "smhasher"]
 	path = smhasher
 	url = git@github.com:aappleby/smhasher.git
