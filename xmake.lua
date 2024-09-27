@@ -25,20 +25,20 @@ target("fifo-lru-cache")
     set_kind("headeronly")
     add_packages("concurrentqueue");
     set_warnings("all", "error")
-    add_includedirs("libcuckoo/libcuckoo")
     add_includedirs(
         "include", 
         "smhasher/src",
+        "libcuckoo/libcuckoo", 
         { public = true }
     )
 
 target("test")
     set_kind("binary")
     add_deps("fifo-lru-cache")
-    add_includedirs("libcuckoo/libcuckoo")
     add_files(
         "test/*.cc",
-        "smhasher/src/Murmur*.cpp"
+        "smhasher/src/Murmur*.cpp", 
+        "libcuckoo/libcuckoo"
     )
     add_packages("gtest")
     set_warnings("all", "error")
