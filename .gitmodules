@@ -1,6 +1,3 @@
-[submodule "smhasher"]
-	path = smhasher
-	url = git@github.com:aappleby/smhasher.git
 [submodule "libcuckoo"]
 	path = libcuckoo
 	url = git@github.com:JPewterschmidt/libcuckoo.git

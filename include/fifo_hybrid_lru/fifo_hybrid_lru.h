@@ -6,7 +6,6 @@
 #include <functional>
 #include <atomic>
 #include <cstdint>
-#include "fifo_hybrid_lru/hash.h"
 #include "cuckoohash_map.hh"
 #undef BLOCK_SIZE
 #include "concurrentqueue/concurrentqueue.h"
@@ -17,7 +16,7 @@ namespace fhl
 template<
     typename KeyType, 
     typename MappedType, 
-    typename Hash = murmur_hash_x64_128_xor_shift_to_64<KeyType>, 
+    typename Hash = ::std::hash<KeyType>, 
     typename KeyEq = ::std::equal_to<KeyType>>
 class fifo_hybrid_lru
 {
