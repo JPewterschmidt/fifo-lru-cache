@@ -119,7 +119,7 @@ public:
     size_t fifo_part_capacity() const noexcept { return m_fifo_part_capacity; }
     size_t evict_thresh() const noexcept { return m_evict_thresh; }
 
-    void reset()
+    void unsafe_reset()
     {
         m_fifo_policy_q = fifo_queue_type();
         m_lru_policy_q = lru_queue_type();
