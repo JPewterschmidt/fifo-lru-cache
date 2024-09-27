@@ -63,8 +63,11 @@ public:
     fifo_hybrid_lru(size_t capacity, double fifo_part_ratio = 0.7, double evict_thresh_ratio = 0.95)
         : m_capacity{ capacity }, 
           m_fifo_part_capacity{ static_cast<size_t>(fifo_part_ratio * m_capacity) }, 
-          m_evict_thresh{ m_capacity * evict_thresh_ratio }
+          m_evict_thresh{ static_cast<size_t>(m_capacity * evict_thresh_ratio) }
     {
+        if (evict_thresh_ratio <= 0.0) 
+            throw ::std::invalid_argument{ "fifo_part_ratio's ctor: Your `evict_thresh_ratio` is <= 0" };
+
         if (m_capacity < 1000)
             m_capacity = 1000;
         if (m_fifo_part_capacity < m_capacity * fifo_part_ratio)
