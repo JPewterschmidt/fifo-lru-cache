@@ -75,13 +75,16 @@ public:
 
     result_type get(const KeyType& k)
     {
-        lru_ele_sptr ele;
-        if (!m_hash.find(k, ele))
-        {
-            return {};
-        }
-
+        auto ele = phantom_get_impl(k);
+        if (!ele) return {};
         promote(ele);
+        return { ele, &ele->m_user_data.second };
+    }
+
+    result_type phantom_get(const KeyType& k)
+    {
+        auto ele = phantom_get_impl(k);
+        if (!ele) return {};
         return { ele, &ele->m_user_data.second };
     }
 
@@ -128,6 +131,14 @@ public:
     }
 
 private:
+    lru_ele_sptr phantom_get_impl(const KeyType& k)
+    {
+        lru_ele_sptr ele;
+        if (!m_hash.find(k, ele))
+            return {};
+        return ele;
+    }
+
     void promote(lru_ele_sptr& ele) 
     {
         manage_block_sptr mb = ele->m_manage_block_ptr.exchange({}, ::std::memory_order_acq_rel);
