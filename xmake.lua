@@ -32,7 +32,7 @@ target("fifo-lru-cache")
         { public = true }
     )
 
-target("test")
+target("fifo-lru-cache-test")
     set_kind("binary")
     add_deps("fifo-lru-cache")
     add_files(
