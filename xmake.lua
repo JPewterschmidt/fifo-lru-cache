@@ -27,7 +27,6 @@ target("fifo-lru-cache")
     set_warnings("all", "error")
     add_includedirs(
         "include", 
-        "smhasher/src",
         "libcuckoo/libcuckoo", 
         { public = true }
     )
