@@ -37,7 +37,6 @@ target("fifo-lru-cache-test")
     add_deps("fifo-lru-cache")
     add_files(
         "test/*.cc",
-        "smhasher/src/Murmur*.cpp", 
         "libcuckoo/libcuckoo"
     )
     add_packages("gtest")
